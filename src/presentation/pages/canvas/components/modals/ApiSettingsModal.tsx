@@ -565,7 +565,7 @@ export function ApiSettingsModal({
               type="text"
               value={editingConfig.modelId}
               onChange={(e) => handleFieldChange(config.id, 'modelId', e.target.value)}
-              className="w-full bg-[#111111] border border-white/10 rounded-lg px-3 py-2 text-[14px] text-zinc-300 outline-none focus:border-white/20 transition-colors"
+              className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-[14px] text-zinc-300 outline-none focus:border-white/20 transition-colors"
               placeholder="例如：gpt-5.4"
             />
 
@@ -577,7 +577,7 @@ export function ApiSettingsModal({
                 value={editingConfig.apiKey}
                 onChange={(e) => handleFieldChange(config.id, 'apiKey', e.target.value)}
                 placeholder="sk-..."
-                className="w-full bg-[#111111] border border-white/10 rounded-lg pl-3 pr-10 py-2 text-[14px] text-zinc-500 placeholder-zinc-600 outline-none focus:border-white/20 transition-colors"
+                className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg pl-3 pr-10 py-2 text-[14px] text-zinc-500 placeholder-zinc-600 outline-none focus:border-white/20 transition-colors"
               />
               {/* 显示按钮 */}
               <button
@@ -613,7 +613,7 @@ export function ApiSettingsModal({
               type="text"
               value={editingConfig.baseUrl}
               onChange={(e) => handleFieldChange(config.id, 'baseUrl', e.target.value)}
-              className="w-full bg-[#111111] border border-white/10 rounded-lg px-3 py-2 text-[14px] text-zinc-300 outline-none focus:border-white/20 transition-colors"
+              className="w-full bg-[#0a0a0a] border border-white/10 rounded-lg px-3 py-2 text-[14px] text-zinc-300 outline-none focus:border-white/20 transition-colors"
               placeholder="例如：https://api.openai.com"
             />
           </div>
@@ -710,7 +710,7 @@ export function ApiSettingsModal({
       <div className="absolute inset-0" onClick={onClose} />
 
       {/* 弹窗主容器 */}
-      <div className="w-full max-w-[800px] h-[85vh] max-h-[850px] bg-[#111111] border border-white/10 rounded-xl shadow-[0_20px_50px_rgb(0,0,0,0.7)] flex flex-col overflow-hidden relative z-10">
+      <div className="w-full max-w-[800px] h-[85vh] max-h-[850px] bg-[#0a0a0a] border border-white/10 rounded-xl shadow-[0_20px_50px_rgb(0,0,0,0.7)] flex flex-col overflow-hidden relative z-10">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-[18px]">
           <h2 className="text-[16px] font-medium text-zinc-100 tracking-wide">模型接口配置</h2>
@@ -770,7 +770,7 @@ export function ApiSettingsModal({
         </div>
 
         {/* 底部 Footer */}
-        <div className="px-6 py-4 border-t border-white/10 bg-[#111111] flex justify-end shrink-0 relative z-10 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)]">
+        <div className="px-6 py-4 border-t border-white/10 bg-[#0a0a0a] flex justify-end shrink-0 relative z-10 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)]">
           <button
             onClick={onClose}
             className="bg-[#0a0a0a] hover:bg-white/10 text-zinc-200 px-6 py-2 rounded-md text-[14px] font-medium transition-colors border border-white/10"
