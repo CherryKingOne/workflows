@@ -4,7 +4,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Project } from '../../../../domain/project/entities/Project';
 import { ApiSettingsModal } from './modals/ApiSettingsModal';
+import { StorageModal } from './modals/StorageModal';
 import { useApiConfigs } from '../../../hooks/useApiConfigs';
+import { useStorage } from '../../../hooks/useStorage';
 
 interface CanvasBoardProps {
   /**
@@ -192,6 +194,45 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     testConnection,
     deleteConfig,
   } = useApiConfigs(true); // true = 使用 Mock 数据，后端对接时改为 false
+
+  /**
+   * 存储管理数据 Hook
+   *
+   * 【职责说明】
+   * 此 Hook 负责管理所有存储配置相关的数据和操作。
+   *
+   * 【当前工作模式】
+   * - 当前使用 Mock 数据（useMockData: true）
+   * - 后端对接时，将 useMockData 改为 false 即可切换为真实模式
+   *
+   * 【返回数据说明】
+   * - config: 当前存储配置
+   * - loading: 是否正在加载
+   * - error: 错误信息（如有）
+   * - onSelectDownloadDirectory: 选择下载目录的函数
+   * - onSelectCacheDirectory: 选择缓存目录的函数
+   * - onUpdateAutoSave: 更新自动保存配置的函数
+   * - onSaveWorkflowNow: 立即保存工作流的函数
+   * - onImportAutoSave: 导入自动保存文件的函数
+   *
+   * 【后续对接说明】
+   * 后端对接时，Hook 内部会调用：
+   * 1. 应用层服务（StorageApplicationService）
+   * 2. 仓库实现（如 SqliteStorageConfigRepository）
+   * 3. Tauri 命令（Rust 后端）
+   *
+   * 详细对接步骤请查看：
+   * src/presentation/hooks/useStorage.ts 文件顶部的注释说明
+   */
+  const {
+    config: storageConfig,
+    loading: storageLoading,
+    onSelectDownloadDirectory,
+    onSelectCacheDirectory,
+    onUpdateAutoSave,
+    onSaveWorkflowNow,
+    onImportAutoSave,
+  } = useStorage(true); // true = 使用 Mock 数据，后端对接时改为 false
 
   /**
    * 处理鼠标按下
@@ -582,55 +623,37 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
         - 模板选择弹窗
       */}
 
-      {/* 
+      {/*
         存储管理弹窗
-        
-        当前仍属于基础骨架示例。
-        如果未来内容继续增加，请第一时间拆成独立 `StorageModal` 组件。
-      */}
-      {isStorageModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center fixed-ui">
-          <div className="w-full max-w-[720px] bg-[#161616] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden max-h-[90vh]">
-            
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-              <div className="flex items-center gap-3 text-gray-200">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                <span className="text-[15px] font-medium">本地存储管理</span>
-              </div>
-              <button onClick={() => setIsStorageModalOpen(false)} className="text-gray-500 hover:text-white transition-colors">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l18 18"></path></svg>
-              </button>
-            </div>
 
-            <div className="flex-1 overflow-y-auto p-6 space-y-5 ui-scrollbar">
-              {/* 
-                下载目录设置区
-                
-                这里目前只是一个示意性的功能区块。
-                后续若要真正接入：
-                - 本地目录选择
-                - 默认导出策略
-                - 存储介质配置
-                - 历史目录记录
-                - 权限提示
-                请拆为更细的子组件或表单模块。
-              */}
-              <section className="border border-white/5 bg-white/5 rounded-xl p-5 space-y-4">
-                <div className="flex items-center gap-2 text-blue-400">
-                  <h3 className="text-sm font-medium text-gray-200">下载目录设置</h3>
-                </div>
-                <div className="bg-black/30 border border-white/5 rounded-lg p-3 flex justify-between items-center">
-                  <span className="text-xs text-gray-500">当前下载目录</span>
-                  <span className="text-xs text-gray-300">Default_Media</span>
-                </div>
-                <button className="w-full bg-blue-600 hover:bg-blue-500 text-white text-sm py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all">
-                  选择下载目录
-                </button>
-              </section>
-            </div>
-          </div>
-        </div>
-      )}
+        此弹窗已拆分为独立组件：
+        - 组件位置：src/presentation/pages/canvas/components/modals/StorageModal.tsx
+        - 数据管理：src/presentation/hooks/useStorage.ts
+        - 应用层：src/application/storage/
+        - 领域层：src/domain/storage/
+
+        【当前工作模式】
+        - 使用 Mock 数据（无需后端即可测试）
+        - 后端对接时，修改 useStorage(true) 为 useStorage(false)
+
+        【详细对接步骤】
+        请查看以下文件顶部的注释说明：
+        1. src/domain/storage/ - 领域模型和仓库接口
+        2. src/application/storage/ - 应用用例和命令
+        3. src/presentation/hooks/useStorage.ts - Hook 和后端对接说明
+        4. src/presentation/pages/canvas/components/modals/StorageModal.tsx - UI 组件
+      */}
+      <StorageModal
+        isOpen={isStorageModalOpen}
+        onClose={() => setIsStorageModalOpen(false)}
+        config={storageConfig}
+        loading={storageLoading}
+        onSelectDownloadDirectory={onSelectDownloadDirectory}
+        onSelectCacheDirectory={onSelectCacheDirectory}
+        onUpdateAutoSave={onUpdateAutoSave}
+        onSaveWorkflowNow={onSaveWorkflowNow}
+        onImportAutoSave={onImportAutoSave}
+      />
 
       {/*
         API 设置弹窗
