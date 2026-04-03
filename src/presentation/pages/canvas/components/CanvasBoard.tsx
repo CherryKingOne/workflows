@@ -3,6 +3,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Project } from '../../../../domain/project/entities/Project';
+import { ApiSettingsModal } from './modals/ApiSettingsModal';
+import { useApiConfigs } from '../../../hooks/useApiConfigs';
 
 interface CanvasBoardProps {
   /**
@@ -141,6 +143,55 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * “当前文件负责调用，不负责容纳所有弹窗细节”
    */
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
+
+  /**
+   * API 设置弹窗状态
+   *
+   * 当前项目里这个弹窗还属于骨架占位性质。
+   * 后续如果 API 配置相关功能继续增加，请不要把完整弹窗逻辑长期堆在当前文件中。
+   *
+   * 推荐做法：
+   * - 已创建 `ApiSettingsModal` 独立组件（位于 ./modals/ApiSettingsModal.tsx）
+   * - 当前主组件只保留开关状态和调用入口
+   * - 数据逻辑通过 `useApiConfigs` Hook 管理
+   *
+   * 以后新增任何弹窗，也都遵循同样思路：
+   * "当前文件负责调用，不负责容纳所有弹窗细节"
+   */
+  const [isApiSettingsModalOpen, setIsApiSettingsModalOpen] = useState(false);
+
+  /**
+   * API 配置数据管理 Hook
+   *
+   * 【职责说明】
+   * 此 Hook 负责管理所有 API 配置相关的数据和操作。
+   *
+   * 【当前工作模式】
+   * - 当前使用 Mock 数据（useMockData: true）
+   * - 后端对接时，将 useMockData 改为 false 即可切换为真实模式
+   *
+   * 【返回数据说明】
+   * - configs: API 配置列表
+   * - loading: 是否正在加载
+   * - testConnection: 测试连接的函数
+   * - saveConfig: 保存配置的函数
+   * - deleteConfig: 删除配置的函数
+   *
+   * 【后续对接说明】
+   * 后端对接时，Hook 内部会调用：
+   * 1. 应用层服务（ApiConfigApplicationService）
+   * 2. 仓库实现（TauriApiConfigRepo）
+   * 3. Tauri 命令（Rust 后端）
+   *
+   * 详细对接步骤请查看：
+   * src/presentation/hooks/useApiConfigs.ts 文件顶部的注释说明
+   */
+  const {
+    configs,
+    loading,
+    testConnection,
+    deleteConfig,
+  } = useApiConfigs(true); // true = 使用 Mock 数据，后端对接时改为 false
 
   /**
    * 处理鼠标按下
@@ -426,7 +477,10 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                 <span>存储</span>
               </button>
-              <button className="flex items-center space-x-1 hover:text-white transition-colors">
+              <button
+                onClick={(e) => { e.stopPropagation(); setIsApiSettingsModalOpen(true); }}
+                className="flex items-center space-x-1 hover:text-white transition-colors"
+              >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
                 <span>API 设置</span>
               </button>
@@ -577,6 +631,35 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
           </div>
         </div>
       )}
+
+      {/*
+        API 设置弹窗
+
+        此弹窗已拆分为独立组件：
+        - 组件位置：src/presentation/pages/canvas/components/modals/ApiSettingsModal.tsx
+        - 数据管理：src/presentation/hooks/useApiConfigs.ts
+        - 应用层：src/application/apiConfig/
+        - 领域层：src/domain/apiConfig/
+
+        【当前工作模式】
+        - 使用 Mock 数据（无需后端即可测试）
+        - 后端对接时，修改 useApiConfigs(true) 为 useApiConfigs(false)
+
+        【详细对接步骤】
+        请查看以下文件顶部的注释说明：
+        1. src/domain/apiConfig/ - 领域模型和仓库接口
+        2. src/application/apiConfig/ - 应用用例和命令
+        3. src/presentation/hooks/useApiConfigs.ts - Hook 和后端对接说明
+        4. src/presentation/pages/canvas/components/modals/ApiSettingsModal.tsx - UI 组件
+      */}
+      <ApiSettingsModal
+        isOpen={isApiSettingsModalOpen}
+        onClose={() => setIsApiSettingsModalOpen(false)}
+        configs={configs}
+        loading={loading}
+        onTestConnection={testConnection}
+        onDeleteConfig={deleteConfig}
+      />
 
     </div>
   );
