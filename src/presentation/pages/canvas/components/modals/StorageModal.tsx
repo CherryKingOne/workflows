@@ -647,7 +647,7 @@ export function StorageModal({
                   }}
                   min={1}
                   max={60}
-                  className="bg-transparent w-8 text-xs text-center outline-none text-gray-300"
+                  className="bg-transparent w-8 text-xs text-center outline-none text-gray-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 {/* 上下调节箭头 */}
                 <div className="flex flex-col border-l border-white/10 ml-2 pl-1">
