@@ -1,12 +1,52 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  addEdge,
+  applyEdgeChanges,
+  applyNodeChanges,
+  type Connection,
+  type Edge,
+  type OnEdgesChange,
+  type OnNodesChange,
+} from '@xyflow/react';
 import { useRouter } from 'next/navigation';
 import { Project } from '../../../../domain/project/entities/Project';
 import { ApiSettingsModal } from './modals/ApiSettingsModal';
 import { StorageModal } from './modals/StorageModal';
 import { useApiConfigs } from '../../../hooks/useApiConfigs';
 import { useStorage } from '../../../hooks/useStorage';
+import { CanvasNodeLayer } from './canvas-nodes/CanvasNodeLayer';
+import { UploadedAssetFloatingToolbar } from './toolbars/UploadedAssetFloatingToolbar';
+import {
+  FILE_UPLOAD_NODE_TYPE,
+  type FileUploadAssetSummary,
+  type FileUploadWorkflowNode,
+} from './canvas-nodes/types';
+
+/**
+ * 上传文件支持的 MIME 前缀
+ *
+ * 当前需求明确只支持图片、视频、音频，所以前端先做一层兜底校验。
+ * 后续后端仍需保留同等校验，前后端双保险更稳妥。
+ */
+const SUPPORTED_UPLOAD_MIME_PREFIXES = ['image/', 'video/', 'audio/'] as const;
+const FILE_UPLOAD_CARD_WIDTH = 320;
+
+/**
+ * 释放节点文件预览 URL
+ *
+ * 注意：
+ * 这些 URL 来自 `URL.createObjectURL`，浏览器不会自动释放。
+ * 必须在替换文件、删除节点、页面退出时显式释放，避免内存持续增长。
+ */
+function revokePreviewUrls(assets?: FileUploadAssetSummary[]) {
+  assets?.forEach((asset) => {
+    if (asset.previewUrl) {
+      URL.revokeObjectURL(asset.previewUrl);
+    }
+  });
+}
 
 interface CanvasBoardProps {
   /**
@@ -81,6 +121,9 @@ interface CanvasBoardProps {
  */
 export function CanvasBoard({ project }: CanvasBoardProps) {
   const router = useRouter();
+  const canvasNodesRef = useRef<FileUploadWorkflowNode[]>([]);
+  const toolbarUploadInputRef = useRef<HTMLInputElement | null>(null);
+  const toolbarUploadTargetNodeIdRef = useRef<string | null>(null);
   
   /**
    * 画布拖拽状态
@@ -129,7 +172,291 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * - 动态菜单配置
    * 建议拆为独立的 ContextMenu 组件和配置工厂。
    */
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; visible: boolean }>({ x: 0, y: 0, visible: false });
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    canvasX: number;
+    canvasY: number;
+    visible: boolean;
+  }>({ x: 0, y: 0, canvasX: 0, canvasY: 0, visible: false });
+
+  /**
+   * 画布节点状态（仅前端 UI）
+   *
+   * 这一版需求只做前端页面，所以节点数据暂存在页面内存里。
+   * 后续接后端时，推荐升级为：
+   * 1. 展示层触发应用层命令（例如 createNode / moveNode / removeNode）
+   * 2. 应用层统一编排仓库与持久化
+   * 3. 展示层只消费结果，不直接承担业务规则
+   */
+  const [canvasNodes, setCanvasNodes] = useState<FileUploadWorkflowNode[]>([]);
+
+  /**
+   * 画布连线状态（仅前端 UI）
+   *
+   * 这一版主要目的是把连线样式和交互做成与原型一致。
+   * 后续接后端时，应与节点一起由应用层命令统一管理。
+   */
+  const [canvasEdges, setCanvasEdges] = useState<Edge[]>([]);
+
+  /**
+   * 当前“可显示上传后工具栏”的激活节点
+   *
+   * 显示规则（与用户需求完全一致）：
+   * 1. 必须是用户当前点击选中的节点（selected === true）
+   * 2. 节点内必须已有上传文件（selectedAssets.length > 0）
+   *
+   * 以下任一情况都不显示：
+   * - 只是右键创建了卡片，但还没上传任何文件
+   * - 有上传文件，但当前没有点击该卡片（未激活）
+   */
+  const activeUploadedNode = canvasNodes.find(
+    (node) => node.selected && (node.data.selectedAssets?.length ?? 0) > 0,
+  );
+
+  /**
+   * 上传后工具栏锚点（视口坐标）
+   *
+   * 计算方式：
+   * - x: 卡片左上角 + 卡片宽度一半
+   * - y: 卡片顶部（工具栏组件内部再向上偏移自身高度）
+   *
+   * 这样可以做到“工具栏固定悬浮在激活卡片上方”，符合原型。
+   */
+  const activeToolbarAnchor = activeUploadedNode
+    ? {
+        x: position.x + activeUploadedNode.position.x + FILE_UPLOAD_CARD_WIDTH / 2,
+        y: position.y + activeUploadedNode.position.y,
+      }
+    : null;
+
+  /**
+   * 节点 ID 自增序列
+   *
+   * 使用 ref 的好处：
+   * - 不会因为序号变化触发重渲染
+   * - 每次创建新节点都能拿到稳定且唯一的 ID
+   *
+   * 后续如果节点改为后端分配 ID，这里可作为“本地临时 ID”保留，等待服务端回填正式 ID。
+   */
+  const nodeSequenceRef = useRef(1);
+
+  /**
+   * 处理节点移动/选中等变更（React Flow 受控模式）
+   *
+   * 采用受控模式是为了后续扩展更复杂能力：
+   * - 撤销/重做
+   * - 协同编辑
+   * - 持久化同步
+   */
+  const handleCanvasNodesChange = useCallback<OnNodesChange<FileUploadWorkflowNode>>((changes) => {
+    setCanvasNodes((previousNodes) => applyNodeChanges(changes, previousNodes));
+  }, []);
+
+  /**
+   * 处理连线增删改（React Flow 受控模式）
+   *
+   * 这里与节点状态分开管理，但职责一致：只做前端状态更新，不做业务规则。
+   */
+  const handleCanvasEdgesChange = useCallback<OnEdgesChange>((changes) => {
+    setCanvasEdges((previousEdges) => applyEdgeChanges(changes, previousEdges));
+  }, []);
+
+  /**
+   * 处理用户拖线连接行为
+   *
+   * 这里统一设置连线默认样式，让“已连接状态”颜色与原型保持一致。
+   */
+  const handleConnect = useCallback((connection: Connection) => {
+    setCanvasEdges((previousEdges) =>
+      addEdge(
+        {
+          ...connection,
+          type: 'default',
+          style: {
+            stroke: '#a3a3a3',
+            strokeWidth: 2,
+          },
+        },
+        previousEdges,
+      ),
+    );
+  }, []);
+
+  /**
+   * 删除节点（由子节点卡片回调触发）
+   *
+   * 设计意图：
+   * - 子组件只上抛“我想删除”
+   * - 真正删数据由装配层执行
+   * 这样能减少组件间耦合，便于后续接入统一的应用层命令。
+   */
+  const handleRemoveNode = useCallback((nodeId: string) => {
+    setCanvasNodes((previousNodes) => {
+      const removingNode = previousNodes.find((node) => node.id === nodeId);
+      revokePreviewUrls(removingNode?.data.selectedAssets);
+      return previousNodes.filter((node) => node.id !== nodeId);
+    });
+    setCanvasEdges((previousEdges) =>
+      previousEdges.filter((edge) => edge.source !== nodeId && edge.target !== nodeId),
+    );
+  }, []);
+
+  /**
+   * 上传动作占位函数（后端对接预留）
+   *
+   * 当前前端任务只做 UI，暂不接真实上传逻辑。
+   * 这里保留函数入口，目的是明确未来后端函数调用的挂接点。
+   *
+   * 推荐后续对接路径（函数调用优先）：
+   * - presentation: 触发该回调
+   * - application: 调用 UploadFileUseCase
+   * - infrastructure: 通过 Tauri 命令适配本地文件能力
+   */
+  const handleRequestUpload = useCallback((nodeId: string, files: File[]) => {
+    const hasInvalidFile = files.some((file) =>
+      !SUPPORTED_UPLOAD_MIME_PREFIXES.some((prefix) => file.type.startsWith(prefix)),
+    );
+
+    if (hasInvalidFile) {
+      setCanvasNodes((previousNodes) =>
+        previousNodes.map((node) => {
+          if (node.id !== nodeId) {
+            return node;
+          }
+          revokePreviewUrls(node.data.selectedAssets);
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              selectedAssets: [],
+              uploadErrorMessage: '仅支持图片、视频、音频文件',
+            },
+          };
+        }),
+      );
+      return;
+    }
+
+    const selectedAssets: FileUploadAssetSummary[] = files.map((file, index) => ({
+      id: `${nodeId}-asset-${Date.now()}-${index}`,
+      name: file.name,
+      mimeType: file.type,
+      sizeInBytes: file.size,
+      previewUrl: URL.createObjectURL(file),
+    }));
+
+    setCanvasNodes((previousNodes) =>
+      previousNodes.map((node) => {
+        if (node.id !== nodeId) {
+          return node;
+        }
+        revokePreviewUrls(node.data.selectedAssets);
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            selectedAssets,
+            uploadErrorMessage: undefined,
+          },
+        };
+      }),
+    );
+
+    /**
+     * 后端函数调用预留位
+     *
+     * 下一步后端接入时，把这里替换为 application 层函数调用。
+     * 示例方向：
+     * - await uploadFileUseCase.execute({ nodeId, files })
+     */
+    console.info(
+      '[UI Placeholder] 已选择上传文件，后续在这里调用后端函数。节点 ID:',
+      nodeId,
+      '文件数量:',
+      files.length,
+    );
+  }, []);
+
+  /**
+   * 工具栏触发“替换上传”入口
+   *
+   * 触发逻辑：
+   * - 记录当前要替换的节点 ID
+   * - 打开隐藏的文件选择器
+   */
+  const handleRequestUploadReplaceFromToolbar = useCallback((nodeId: string) => {
+    toolbarUploadTargetNodeIdRef.current = nodeId;
+    toolbarUploadInputRef.current?.click();
+  }, []);
+
+  /**
+   * 工具栏文件选择器变更回调
+   *
+   * 这里会把新文件交给统一的 `handleRequestUpload`，
+   * 以“替换模式”覆盖当前节点原文件预览。
+   */
+  const handleToolbarUploadInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    const targetNodeId = toolbarUploadTargetNodeIdRef.current;
+    if (selectedFiles.length === 0 || !targetNodeId) {
+      event.currentTarget.value = '';
+      return;
+    }
+
+    handleRequestUpload(targetNodeId, selectedFiles);
+    event.currentTarget.value = '';
+  }, [handleRequestUpload]);
+
+  /**
+   * 维护最新节点快照，供卸载时清理预览 URL。
+   */
+  useEffect(() => {
+    canvasNodesRef.current = canvasNodes;
+  }, [canvasNodes]);
+
+  /**
+   * 页面卸载时统一清理所有预览 URL，避免内存泄漏。
+   */
+  useEffect(() => {
+    return () => {
+      canvasNodesRef.current.forEach((node) => {
+        revokePreviewUrls(node.data.selectedAssets);
+      });
+    };
+  }, []);
+
+  /**
+   * 创建“上传文件”节点
+   *
+   * 由右键菜单触发，使用菜单打开时记录的画布坐标来决定初始位置。
+   * 该函数只负责节点前端创建，不承担业务规则。
+   */
+  const createFileUploadNodeFromContextMenu = useCallback(() => {
+    const nodeId = `file-upload-${nodeSequenceRef.current}`;
+    nodeSequenceRef.current += 1;
+
+    const nextNode: FileUploadWorkflowNode = {
+      id: nodeId,
+      type: FILE_UPLOAD_NODE_TYPE,
+      position: {
+        // 原型卡片尺寸约 320px，创建时让菜单点击点更接近卡片中心，交互更自然。
+        x: Math.max(0, contextMenu.canvasX - 160),
+        y: Math.max(0, contextMenu.canvasY - 160),
+      },
+      data: {
+        title: '文件上传',
+        hintLines: ['或拖放文件到此处', '或 Ctrl+V 粘贴', '支持图片、视频、音频素材'],
+        selectedAssets: [],
+        uploadErrorMessage: undefined,
+        onRequestRemove: handleRemoveNode,
+        onRequestBackendUpload: handleRequestUpload,
+      },
+    };
+
+    setCanvasNodes((previousNodes) => [...previousNodes, nextNode]);
+    setContextMenu((previous) => ({ ...previous, visible: false }));
+  }, [contextMenu.canvasX, contextMenu.canvasY, handleRemoveNode, handleRequestUpload]);
 
   /**
    * 存储管理弹窗状态
@@ -245,7 +572,12 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    */
   const handleMouseDown = (e: React.MouseEvent) => {
     // 忽略点击在 UI 元素上的拖拽，只允许在画布背景上拖拽
-    if ((e.target as Element).closest('header') || (e.target as Element).closest('.fixed-ui') || (e.target as Element).closest('#context-menu')) {
+    if (
+      (e.target as Element).closest('header') ||
+      (e.target as Element).closest('.fixed-ui') ||
+      (e.target as Element).closest('#context-menu') ||
+      (e.target as Element).closest('.react-flow__node')
+    ) {
       return;
     }
     // 左键拖拽，右键显示菜单（这里屏蔽掉左键点击直接显示菜单的行为，改为右键或者后续通过别的交互显示）
@@ -305,6 +637,8 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
+      canvasX: e.clientX - position.x,
+      canvasY: e.clientY - position.y,
       visible: true
     });
   };
@@ -441,20 +775,30 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
           }}
         >
           {/* 
-            这里将是节点渲染的地方。
-            
-            未来功能预留说明：
-            - 预留工作流卡片渲染
-            - 预留节点组渲染
-            - 预留拖拽创建后的临时节点
-            - 预留节点选中态
-            - 预留节点连线层
-            - 预留批量选择框
-            - 预留对齐辅助线
-            
-            建议未来不要直接把所有 JSX 塞进这里，
-            而是保持“调用设计好的页面函数 / 组件函数”的方式来组织。
+            节点渲染层（已接入 React Flow）
+
+            当前版本已完成：
+            - 右键菜单点击“上传文件”后创建节点卡片
+            - 节点可拖拽、可选中、可删除
+            - 节点内“选择文件”按钮预留后端调用入口
+
+            对新手非常重要的边界说明：
+            - 节点 UI 结构：在 `components/canvas-nodes/*`
+            - 节点创建入口：当前文件右键菜单动作
+            - 后端调用挂接：`handleRequestUpload`
+
+            后续新增其它节点时，建议流程：
+            1. 先在 `canvas-nodes/types.ts` 新增节点数据契约
+            2. 再新增自定义节点组件
+            3. 最后在右键菜单或工具栏接入创建动作
           */}
+          <CanvasNodeLayer
+            nodes={canvasNodes}
+            edges={canvasEdges}
+            onNodesChange={handleCanvasNodesChange}
+            onEdgesChange={handleCanvasEdgesChange}
+            onConnect={handleConnect}
+          />
         </div>
       </div>
 
@@ -547,6 +891,35 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
         </div>
       </div>
 
+      {/*
+        上传后悬浮工具栏
+
+        显示门槛非常严格，必须同时满足：
+        - 当前节点被用户点击选中（激活态）
+        - 当前节点已存在上传文件
+
+        这是为了避免两类误显示：
+        1. 用户仅创建了空卡片（未上传）时误出现工具栏
+        2. 用户未点击该节点时抢占视觉焦点
+      */}
+      {activeUploadedNode && activeToolbarAnchor && (
+        <>
+          <UploadedAssetFloatingToolbar
+            activeNodeId={activeUploadedNode.id}
+            anchorX={activeToolbarAnchor.x}
+            anchorY={activeToolbarAnchor.y}
+            onRequestUploadReplace={handleRequestUploadReplaceFromToolbar}
+          />
+          <input
+            ref={toolbarUploadInputRef}
+            type="file"
+            accept="image/*,video/*,audio/*"
+            className="hidden"
+            onChange={handleToolbarUploadInputChange}
+          />
+        </>
+      )}
+
       {/* ========================================================= */}
       {/* 4. 右键菜单 (Context Menu) */}
       {/* ========================================================= */}
@@ -576,7 +949,10 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
             等独立文件。
           */}
           <div className="flex flex-col px-1 min-w-[180px] pt-1">
-            <button className="flex items-center px-3 py-1.5 hover:bg-white/5 rounded-md group transition-colors">
+            <button
+              onClick={createFileUploadNodeFromContextMenu}
+              className="flex items-center px-3 py-1.5 hover:bg-white/5 rounded-md group transition-colors"
+            >
               <svg className="w-4 h-4 text-gray-400 group-hover:text-white mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
               <span className="text-[13px] text-gray-300 group-hover:text-white">上传文件</span>
             </button>
