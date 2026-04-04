@@ -45,6 +45,17 @@ export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadW
   const isNodeActive = selected;
   const updateNodeInternals = useUpdateNodeInternals();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const firstAsset = data.selectedAssets?.[0];
+  const hasSelectedAssets = Boolean(data.selectedAssets && data.selectedAssets.length > 0);
+  const cardWidth = data.cardWidth ?? 320;
+  const cardHeight = data.cardHeight ?? 320;
+  const isImageAsset = Boolean(firstAsset && firstAsset.mimeType.startsWith('image/'));
+  const isVideoAsset = Boolean(firstAsset && firstAsset.mimeType.startsWith('video/'));
+  const isAudioAsset = Boolean(firstAsset && firstAsset.mimeType.startsWith('audio/'));
+  const shouldRenderFillMedia = hasSelectedAssets && (isImageAsset || isVideoAsset);
+  const topDisplayName = hasSelectedAssets
+    ? toDisplayNameWithoutExtension(firstAsset?.name ?? data.title)
+    : data.title;
 
   /**
    * 当激活态切换时，主动通知 React Flow 重新计算 handle 几何信息。
@@ -55,7 +66,7 @@ export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadW
    */
   useEffect(() => {
     updateNodeInternals(id);
-  }, [id, isNodeActive, updateNodeInternals]);
+  }, [id, isNodeActive, cardWidth, cardHeight, updateNodeInternals]);
 
   /**
    * 上传按钮点击处理
@@ -97,21 +108,12 @@ export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadW
     data.onRequestRemove?.(id);
   };
 
-  const firstAsset = data.selectedAssets?.[0];
-  const hasSelectedAssets = Boolean(data.selectedAssets && data.selectedAssets.length > 0);
-  const isImageAsset = Boolean(firstAsset && firstAsset.mimeType.startsWith('image/'));
-  const isVideoAsset = Boolean(firstAsset && firstAsset.mimeType.startsWith('video/'));
-  const isAudioAsset = Boolean(firstAsset && firstAsset.mimeType.startsWith('audio/'));
-  const shouldRenderFillMedia = hasSelectedAssets && (isImageAsset || isVideoAsset);
-  const topDisplayName = hasSelectedAssets
-    ? toDisplayNameWithoutExtension(firstAsset?.name ?? data.title)
-    : data.title;
-
   return (
     <div
-      className={`relative w-[320px] h-[320px] rounded-2xl border ${
+      className={`relative rounded-2xl border ${
         selected ? 'border-neutral-500 shadow-[0_0_20px_rgba(255,255,255,0.05)]' : 'border-transparent'
       } bg-[#18191c] flex flex-col items-center justify-center text-neutral-300`}
+      style={{ width: `${cardWidth}px`, height: `${cardHeight}px` }}
     >
       <div
         className={`absolute inset-0 rounded-2xl overflow-hidden ${
@@ -174,7 +176,10 @@ export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadW
         }}
       />
 
-      <div className="absolute left-0 top-[-26px] max-w-[280px] truncate text-[12px] text-neutral-300">
+      <div
+        className="absolute left-0 top-[-26px] truncate text-[12px] text-neutral-300"
+        style={{ maxWidth: `${Math.max(120, cardWidth - 40)}px` }}
+      >
         {topDisplayName}
       </div>
 

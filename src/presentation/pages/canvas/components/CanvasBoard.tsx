@@ -31,7 +31,17 @@ import {
  * 后续后端仍需保留同等校验，前后端双保险更稳妥。
  */
 const SUPPORTED_UPLOAD_MIME_PREFIXES = ['image/', 'video/', 'audio/'] as const;
-const FILE_UPLOAD_CARD_WIDTH = 320;
+const DEFAULT_FILE_UPLOAD_CARD_WIDTH = 320;
+const DEFAULT_FILE_UPLOAD_CARD_HEIGHT = 320;
+/**
+ * 动态卡片尺寸边界（按当前视觉稿收敛）
+ *
+ * 说明：
+ * - 保留“按比例自适应”
+ * - 但限制在更克制的区间，避免上传后卡片过大影响画布浏览
+ */
+const MAX_FILE_UPLOAD_CARD_LONG_SIDE = 360;
+const MIN_FILE_UPLOAD_CARD_SHORT_SIDE = 150;
 
 /**
  * 释放节点文件预览 URL
@@ -46,6 +56,91 @@ function revokePreviewUrls(assets?: FileUploadAssetSummary[]) {
       URL.revokeObjectURL(asset.previewUrl);
     }
   });
+}
+
+/**
+ * 读取媒体源分辨率（仅图片/视频）
+ *
+ * 说明：
+ * - 音频文件没有宽高，返回 null
+ * - 该函数只负责前端展示尺寸计算，不参与业务规则判断
+ */
+async function readMediaDimensions(file: File): Promise<{ width: number; height: number } | null> {
+  if (file.type.startsWith('image/')) {
+    return new Promise((resolve) => {
+      const imageObjectUrl = URL.createObjectURL(file);
+      const image = new Image();
+
+      image.onload = () => {
+        resolve({ width: image.naturalWidth, height: image.naturalHeight });
+        URL.revokeObjectURL(imageObjectUrl);
+      };
+      image.onerror = () => {
+        resolve(null);
+        URL.revokeObjectURL(imageObjectUrl);
+      };
+
+      image.src = imageObjectUrl;
+    });
+  }
+
+  if (file.type.startsWith('video/')) {
+    return new Promise((resolve) => {
+      const videoObjectUrl = URL.createObjectURL(file);
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+
+      video.onloadedmetadata = () => {
+        resolve({ width: video.videoWidth, height: video.videoHeight });
+        URL.revokeObjectURL(videoObjectUrl);
+      };
+      video.onerror = () => {
+        resolve(null);
+        URL.revokeObjectURL(videoObjectUrl);
+      };
+
+      video.src = videoObjectUrl;
+    });
+  }
+
+  return null;
+}
+
+/**
+ * 根据媒体宽高计算卡片尺寸（保持比例）
+ *
+ * 设计目标：
+ * - 不再固定正方形
+ * - 长边受上限控制，避免超大
+ * - 短边保证最小可读性
+ */
+function getAdaptiveCardSize(width: number, height: number): { cardWidth: number; cardHeight: number } {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return {
+      cardWidth: DEFAULT_FILE_UPLOAD_CARD_WIDTH,
+      cardHeight: DEFAULT_FILE_UPLOAD_CARD_HEIGHT,
+    };
+  }
+
+  let scaledWidth = width;
+  let scaledHeight = height;
+
+  const longSide = Math.max(scaledWidth, scaledHeight);
+  const scaleToLongSide = MAX_FILE_UPLOAD_CARD_LONG_SIDE / longSide;
+  scaledWidth *= scaleToLongSide;
+  scaledHeight *= scaleToLongSide;
+
+  const shortSide = Math.min(scaledWidth, scaledHeight);
+  if (shortSide < MIN_FILE_UPLOAD_CARD_SHORT_SIDE) {
+    const scaleToShortSide = MIN_FILE_UPLOAD_CARD_SHORT_SIDE / shortSide;
+    scaledWidth *= scaleToShortSide;
+    scaledHeight *= scaleToShortSide;
+  }
+
+  return {
+    cardWidth: Math.round(scaledWidth),
+    cardHeight: Math.round(scaledHeight),
+  };
 }
 
 interface CanvasBoardProps {
@@ -225,7 +320,10 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    */
   const activeToolbarAnchor = activeUploadedNode
     ? {
-        x: position.x + activeUploadedNode.position.x + FILE_UPLOAD_CARD_WIDTH / 2,
+        x:
+          position.x +
+          activeUploadedNode.position.x +
+          (activeUploadedNode.data.cardWidth ?? DEFAULT_FILE_UPLOAD_CARD_WIDTH) / 2,
         y: position.y + activeUploadedNode.position.y,
       }
     : null;
@@ -313,7 +411,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * - application: 调用 UploadFileUseCase
    * - infrastructure: 通过 Tauri 命令适配本地文件能力
    */
-  const handleRequestUpload = useCallback((nodeId: string, files: File[]) => {
+  const handleRequestUpload = useCallback(async (nodeId: string, files: File[]) => {
     const hasInvalidFile = files.some((file) =>
       !SUPPORTED_UPLOAD_MIME_PREFIXES.some((prefix) => file.type.startsWith(prefix)),
     );
@@ -346,16 +444,34 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       previewUrl: URL.createObjectURL(file),
     }));
 
+    const firstSelectedFile = files[0];
+    const mediaDimensions = firstSelectedFile ? await readMediaDimensions(firstSelectedFile) : null;
+    const nextCardSize = mediaDimensions
+      ? getAdaptiveCardSize(mediaDimensions.width, mediaDimensions.height)
+      : {
+          cardWidth: DEFAULT_FILE_UPLOAD_CARD_WIDTH,
+          cardHeight: DEFAULT_FILE_UPLOAD_CARD_HEIGHT,
+        };
+
     setCanvasNodes((previousNodes) =>
       previousNodes.map((node) => {
         if (node.id !== nodeId) {
           return node;
         }
         revokePreviewUrls(node.data.selectedAssets);
+        const previousCardWidth = node.data.cardWidth ?? DEFAULT_FILE_UPLOAD_CARD_WIDTH;
+        const previousCardHeight = node.data.cardHeight ?? DEFAULT_FILE_UPLOAD_CARD_HEIGHT;
+        const adjustedPosition = {
+          x: node.position.x + (previousCardWidth - nextCardSize.cardWidth) / 2,
+          y: node.position.y + (previousCardHeight - nextCardSize.cardHeight) / 2,
+        };
         return {
           ...node,
+          position: adjustedPosition,
           data: {
             ...node.data,
+            cardWidth: nextCardSize.cardWidth,
+            cardHeight: nextCardSize.cardHeight,
             selectedAssets,
             uploadErrorMessage: undefined,
           },
@@ -441,12 +557,14 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       type: FILE_UPLOAD_NODE_TYPE,
       position: {
         // 原型卡片尺寸约 320px，创建时让菜单点击点更接近卡片中心，交互更自然。
-        x: Math.max(0, contextMenu.canvasX - 160),
-        y: Math.max(0, contextMenu.canvasY - 160),
+        x: Math.max(0, contextMenu.canvasX - DEFAULT_FILE_UPLOAD_CARD_WIDTH / 2),
+        y: Math.max(0, contextMenu.canvasY - DEFAULT_FILE_UPLOAD_CARD_HEIGHT / 2),
       },
       data: {
         title: '文件上传',
         hintLines: ['或拖放文件到此处', '或 Ctrl+V 粘贴', '支持图片、视频、音频素材'],
+        cardWidth: DEFAULT_FILE_UPLOAD_CARD_WIDTH,
+        cardHeight: DEFAULT_FILE_UPLOAD_CARD_HEIGHT,
         selectedAssets: [],
         uploadErrorMessage: undefined,
         onRequestRemove: handleRemoveNode,

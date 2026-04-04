@@ -51,6 +51,8 @@ export interface FileUploadAssetSummary {
 export interface FileUploadNodeData extends Record<string, unknown> {
   title: string;
   hintLines: string[];
+  cardWidth?: number;
+  cardHeight?: number;
   selectedAssets?: FileUploadAssetSummary[];
   uploadErrorMessage?: string;
   onRequestRemove?: (nodeId: string) => void;
