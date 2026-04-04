@@ -11,10 +11,12 @@ import {
   type OnNodesChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { CompareNodeCard } from './CompareNodeCard';
 import { FileUploadNodeCard } from './FileUploadNodeCard';
 import { ImageGenerationNodeCard } from './ImageGenerationNodeCard';
 import { PreviewNodeCard } from './PreviewNodeCard';
 import {
+  COMPARE_NODE_TYPE,
   FILE_UPLOAD_NODE_TYPE,
   IMAGE_GENERATION_NODE_TYPE,
   PREVIEW_NODE_TYPE,
@@ -28,6 +30,7 @@ import {
  * 这是 React Flow 官方推荐实践。
  */
 const nodeTypes: NodeTypes = {
+  [COMPARE_NODE_TYPE]: CompareNodeCard,
   [FILE_UPLOAD_NODE_TYPE]: FileUploadNodeCard,
   [IMAGE_GENERATION_NODE_TYPE]: ImageGenerationNodeCard,
   [PREVIEW_NODE_TYPE]: PreviewNodeCard,

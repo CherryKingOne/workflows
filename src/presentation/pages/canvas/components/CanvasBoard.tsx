@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   addEdge,
   applyEdgeChanges,
@@ -19,10 +19,12 @@ import { useStorage } from '../../../hooks/useStorage';
 import { CanvasNodeLayer } from './canvas-nodes/CanvasNodeLayer';
 import { UploadedAssetFloatingToolbar } from './toolbars/UploadedAssetFloatingToolbar';
 import {
+  COMPARE_NODE_TYPE,
   type CanvasWorkflowNode,
   FILE_UPLOAD_NODE_TYPE,
   IMAGE_GENERATION_NODE_TYPE,
   PREVIEW_NODE_TYPE,
+  type CompareWorkflowNode,
   type FileUploadAssetSummary,
   type FileUploadWorkflowNode,
   type ImageGenerationPromptDraft,
@@ -37,6 +39,11 @@ import {
  * 后续后端仍需保留同等校验，前后端双保险更稳妥。
  */
 const SUPPORTED_UPLOAD_MIME_PREFIXES = ['image/', 'video/', 'audio/'] as const;
+const DEFAULT_COMPARE_NODE_CARD_WIDTH = 380;
+const DEFAULT_COMPARE_NODE_CARD_HEIGHT = 240;
+const DEFAULT_COMPARE_NODE_READY_CARD_HEIGHT = 260;
+const MAX_COMPARE_NODE_CARD_LONG_SIDE = 460;
+const MIN_COMPARE_NODE_CARD_SHORT_SIDE = 200;
 const DEFAULT_FILE_UPLOAD_CARD_WIDTH = 320;
 const DEFAULT_FILE_UPLOAD_CARD_HEIGHT = 320;
 const DEFAULT_IMAGE_NODE_CARD_WIDTH = 400;
@@ -64,6 +71,159 @@ const MIN_FILE_UPLOAD_CARD_SHORT_SIDE = 150;
  */
 function isFileUploadWorkflowNode(node: CanvasWorkflowNode): node is FileUploadWorkflowNode {
   return node.type === FILE_UPLOAD_NODE_TYPE;
+}
+
+/**
+ * 节点类型守卫：是否为“对比节点”
+ */
+function isCompareWorkflowNode(node: CanvasWorkflowNode): node is CompareWorkflowNode {
+  return node.type === COMPARE_NODE_TYPE;
+}
+
+/**
+ * 对比节点可消费的素材摘要
+ *
+ * 说明：
+ * - 这里只提取“前端对比渲染必需字段”
+ * - 便于后续替换为后端返回结构时，集中在一个地方改映射
+ */
+interface CompareRenderableAsset {
+  name: string;
+  mimeType: string;
+  previewUrl: string;
+  kind: 'image' | 'video' | 'audio';
+  sourceCardWidth: number;
+  sourceCardHeight: number;
+}
+
+/**
+ * 从上传节点提取可用于对比的首个素材
+ *
+ * 当前规则：
+ * - 只取 `selectedAssets[0]`
+ * - 必须有 previewUrl 才能渲染
+ */
+function extractComparableAssetFromUploadNode(
+  node: FileUploadWorkflowNode,
+): CompareRenderableAsset | null {
+  const firstAsset = node.data.selectedAssets?.[0];
+  if (!firstAsset?.previewUrl) {
+    return null;
+  }
+
+  if (firstAsset.mimeType.startsWith('image/')) {
+    return {
+      name: firstAsset.name,
+      mimeType: firstAsset.mimeType,
+      previewUrl: firstAsset.previewUrl,
+      kind: 'image',
+      sourceCardWidth: node.data.cardWidth ?? DEFAULT_FILE_UPLOAD_CARD_WIDTH,
+      sourceCardHeight: node.data.cardHeight ?? DEFAULT_FILE_UPLOAD_CARD_HEIGHT,
+    };
+  }
+
+  if (firstAsset.mimeType.startsWith('video/')) {
+    return {
+      name: firstAsset.name,
+      mimeType: firstAsset.mimeType,
+      previewUrl: firstAsset.previewUrl,
+      kind: 'video',
+      sourceCardWidth: node.data.cardWidth ?? DEFAULT_FILE_UPLOAD_CARD_WIDTH,
+      sourceCardHeight: node.data.cardHeight ?? DEFAULT_FILE_UPLOAD_CARD_HEIGHT,
+    };
+  }
+
+  if (firstAsset.mimeType.startsWith('audio/')) {
+    return {
+      name: firstAsset.name,
+      mimeType: firstAsset.mimeType,
+      previewUrl: firstAsset.previewUrl,
+      kind: 'audio',
+      sourceCardWidth: node.data.cardWidth ?? DEFAULT_FILE_UPLOAD_CARD_WIDTH,
+      sourceCardHeight: node.data.cardHeight ?? DEFAULT_FILE_UPLOAD_CARD_HEIGHT,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * 对比节点尺寸自适应（按素材尺寸比例）
+ *
+ * 目标：
+ * - 避免对比卡片固定尺寸导致内容挤压/过度裁切
+ * - 保持画布可读性，长边不无限增大
+ */
+function getAdaptiveCompareNodeCardSize(
+  width: number,
+  height: number,
+): { cardWidth: number; cardHeight: number } {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return {
+      cardWidth: DEFAULT_COMPARE_NODE_CARD_WIDTH,
+      cardHeight: DEFAULT_COMPARE_NODE_READY_CARD_HEIGHT,
+    };
+  }
+
+  let scaledWidth = width;
+  let scaledHeight = height;
+
+  const longSide = Math.max(scaledWidth, scaledHeight);
+  /**
+   * 对比卡片仅做“缩小适配”，不做“反向放大”。
+   *
+   * 原因：
+   * - 之前会把部分素材放大，导致对比卡片视觉上过大
+   * - 现在限制最大缩放系数为 1，避免比来源素材更大
+   */
+  const scaleToLongSide = Math.min(MAX_COMPARE_NODE_CARD_LONG_SIDE / longSide, 1);
+  scaledWidth *= scaleToLongSide;
+  scaledHeight *= scaleToLongSide;
+
+  const shortSide = Math.min(scaledWidth, scaledHeight);
+  if (shortSide < MIN_COMPARE_NODE_CARD_SHORT_SIDE) {
+    const scaleToShortSide = MIN_COMPARE_NODE_CARD_SHORT_SIDE / shortSide;
+    scaledWidth *= scaleToShortSide;
+    scaledHeight *= scaleToShortSide;
+  }
+
+  return {
+    cardWidth: Math.round(scaledWidth),
+    cardHeight: Math.round(scaledHeight),
+  };
+}
+
+/**
+ * 计算“对比节点”的基准素材尺寸（用于卡片尺寸推导）
+ *
+ * 关键规则（本次按你的需求调整）：
+ * - 当两路素材宽高不一致时，不再取平均值；
+ * - 改为“宽取最大值、高取最大值”。
+ *
+ * 这样做的直接收益：
+ * 1. 卡片不会因为一侧素材较小而被整体压短；
+ * 2. 对比区域能容纳完整素材内容；
+ * 3. 多余空白区域交给卡片内部的棋盘格背景承接（见 CompareNodeCard）。
+ *
+ * 注意：
+ * - 这里只负责“尺寸推导策略”，不负责真正媒体绘制；
+ * - 媒体绘制与补白样式在展示层组件 CompareNodeCard 中实现。
+ */
+function getCompareNodeBaseMediaSize(
+  leftAsset: CompareRenderableAsset,
+  rightAsset?: CompareRenderableAsset,
+): { width: number; height: number } {
+  if (!rightAsset) {
+    return {
+      width: leftAsset.sourceCardWidth,
+      height: leftAsset.sourceCardHeight,
+    };
+  }
+
+  return {
+    width: Math.max(leftAsset.sourceCardWidth, rightAsset.sourceCardWidth),
+    height: Math.max(leftAsset.sourceCardHeight, rightAsset.sourceCardHeight),
+  };
 }
 
 /**
@@ -316,6 +476,170 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * 后续接后端时，应与节点一起由应用层命令统一管理。
    */
   const [canvasEdges, setCanvasEdges] = useState<Edge[]>([]);
+
+  /**
+   * 根据“连线关系 + 上传节点素材”同步对比节点数据（纯前端内存态）
+   *
+   * 这个函数是当前前端数据传输的核心桥接点：
+   * - 输入：当前全部节点 + 当前全部连线
+   * - 输出：把每个 compare 节点更新到最新可渲染状态
+   *
+   * 当前规则（前端可用版）：
+   * 1. 只处理“连到 compare 节点”的入边
+   * 2. 每个来源上传节点只取 `selectedAssets[0]`
+   * 3. 至少 1 路可渲染素材即可进入 ready 并显示内容
+   * 4. 如果有 2 路素材，要求类型一致（image/video/audio）
+   *
+   * 说明：
+   * - 这套规则故意收敛，目的是先跑通前端链路
+   * - 后续接后端时，可把规则收敛到 application 层并在这里做结果映射
+   */
+  const syncCompareNodesByConnections = useCallback(
+    (nodes: CanvasWorkflowNode[], edges: Edge[]): CanvasWorkflowNode[] => {
+      const nodeById = new Map(nodes.map((node) => [node.id, node]));
+      let hasAnyCompareNodeChanged = false;
+
+      const nextNodes = nodes.map((node) => {
+        if (!isCompareWorkflowNode(node)) {
+          return node;
+        }
+
+        const incomingEdges = edges.filter((edge) => edge.target === node.id);
+        const incomingComparableAssets = incomingEdges
+          .map((edge) => nodeById.get(edge.source))
+          .filter((sourceNode): sourceNode is FileUploadWorkflowNode => Boolean(sourceNode && isFileUploadWorkflowNode(sourceNode)))
+          .map((uploadNode) => extractComparableAssetFromUploadNode(uploadNode))
+          .filter((asset): asset is CompareRenderableAsset => Boolean(asset));
+
+        const firstTwoAssets = incomingComparableAssets.slice(0, 2);
+        const firstAsset = firstTwoAssets[0];
+        const secondAsset = firstTwoAssets[1];
+        const hasAtLeastOneAsset = Boolean(firstAsset);
+        const hasTwoAssets = Boolean(firstAsset && secondAsset);
+        const hasSameKind = hasTwoAssets && firstAsset.kind === secondAsset.kind;
+
+        let nextCompareStatus: 'empty' | 'ready' = 'empty';
+        let nextCompareMedia: CompareWorkflowNode['data']['compareMedia'] = undefined;
+        let nextCompareErrorMessage: string | undefined = undefined;
+        let nextCardWidth = DEFAULT_COMPARE_NODE_CARD_WIDTH;
+        let nextCardHeight = DEFAULT_COMPARE_NODE_CARD_HEIGHT;
+
+        if (!hasAtLeastOneAsset) {
+          if (incomingEdges.length > 0) {
+            nextCompareErrorMessage = '当前连接素材不可预览，请检查上传内容';
+          }
+        } else if (!hasTwoAssets && firstAsset) {
+          const singleAssetBaseSize = getCompareNodeBaseMediaSize(firstAsset);
+          const singleAssetCardSize = getAdaptiveCompareNodeCardSize(
+            singleAssetBaseSize.width,
+            singleAssetBaseSize.height,
+          );
+          nextCompareStatus = 'ready';
+          /**
+           * 单路素材兜底策略：
+           * - 先把同一路素材映射到左右两侧，保证卡片即时可见
+           * - 第二路素材接入后会自动被替换为真实双路对比
+           */
+          nextCompareMedia = {
+            kind: firstAsset.kind,
+            leftMediaUrl: firstAsset.previewUrl,
+            rightMediaUrl: firstAsset.previewUrl,
+            leftMimeType: firstAsset.mimeType,
+            rightMimeType: firstAsset.mimeType,
+            /**
+             * 标签固定策略（按产品确认）：
+             * - 左侧统一显示“原始”
+             * - 右侧统一显示“生成”
+             *
+             * 说明：
+             * - 这里不再显示文件名，避免不同来源素材名称干扰对比语义。
+             * - 如果后续需要“悬浮查看真实文件名”，建议新增独立字段 tooltipLabel，
+             *   不要再覆盖对比主标签，保持视觉语义稳定。
+             */
+            leftLabel: '原始',
+            rightLabel: '生成',
+          };
+          nextCardWidth = singleAssetCardSize.cardWidth;
+          nextCardHeight = singleAssetCardSize.cardHeight;
+        } else if (!hasSameKind) {
+          nextCompareErrorMessage = '仅支持同类型素材对比（图片/视频/音频需一致）';
+        } else {
+          const leftAsset = firstAsset;
+          const rightAsset = secondAsset;
+          if (!leftAsset || !rightAsset) {
+            return node;
+          }
+          /**
+           * 双素材尺寸策略（按最大宽高，而非平均值）
+           *
+           * 旧策略问题：
+           * - 用平均值时，宽高差异大的素材会把容器“折中压缩”，视觉上像被挤短。
+           *
+           * 新策略收益：
+           * - 先按最大包络计算卡片尺寸，再在卡片内部用棋盘格补齐留白。
+           * - 用户可以看到完整素材轮廓，不会误以为内容被裁掉或比例异常。
+           */
+          const mergedBaseSize = getCompareNodeBaseMediaSize(leftAsset, rightAsset);
+          const mergedAssetCardSize = getAdaptiveCompareNodeCardSize(
+            mergedBaseSize.width,
+            mergedBaseSize.height,
+          );
+          nextCompareStatus = 'ready';
+          nextCompareMedia = {
+            kind: leftAsset.kind,
+            leftMediaUrl: leftAsset.previewUrl,
+            rightMediaUrl: rightAsset.previewUrl,
+            leftMimeType: leftAsset.mimeType,
+            rightMimeType: rightAsset.mimeType,
+            /**
+             * 对比标签固定为“原始 / 生成”
+             *
+             * 无论文件名是什么，卡片语义都保持一致：
+             * - 左侧代表输入原始素材
+             * - 右侧代表输出生成结果
+             */
+            leftLabel: '原始',
+            rightLabel: '生成',
+          };
+          nextCardWidth = mergedAssetCardSize.cardWidth;
+          nextCardHeight = mergedAssetCardSize.cardHeight;
+        }
+
+        const isSameAsCurrent =
+          node.data.compareStatus === nextCompareStatus &&
+          node.data.compareErrorMessage === nextCompareErrorMessage &&
+          node.data.cardWidth === nextCardWidth &&
+          node.data.cardHeight === nextCardHeight &&
+          (node.data.compareMedia?.kind ?? undefined) === (nextCompareMedia?.kind ?? undefined) &&
+          (node.data.compareMedia?.leftMediaUrl ?? undefined) === (nextCompareMedia?.leftMediaUrl ?? undefined) &&
+          (node.data.compareMedia?.rightMediaUrl ?? undefined) === (nextCompareMedia?.rightMediaUrl ?? undefined) &&
+          (node.data.compareMedia?.leftMimeType ?? undefined) === (nextCompareMedia?.leftMimeType ?? undefined) &&
+          (node.data.compareMedia?.rightMimeType ?? undefined) === (nextCompareMedia?.rightMimeType ?? undefined) &&
+          (node.data.compareMedia?.leftLabel ?? undefined) === (nextCompareMedia?.leftLabel ?? undefined) &&
+          (node.data.compareMedia?.rightLabel ?? undefined) === (nextCompareMedia?.rightLabel ?? undefined);
+
+        if (isSameAsCurrent) {
+          return node;
+        }
+
+        hasAnyCompareNodeChanged = true;
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            compareStatus: nextCompareStatus,
+            compareMedia: nextCompareMedia,
+            compareErrorMessage: nextCompareErrorMessage,
+            cardWidth: nextCardWidth,
+            cardHeight: nextCardHeight,
+          },
+        };
+      });
+
+      return hasAnyCompareNodeChanged ? nextNodes : nodes;
+    },
+    [],
+  );
 
   /**
    * 当前“可显示上传后工具栏”的激活节点
@@ -575,6 +899,28 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   }, []);
 
   /**
+   * 对比节点“同步对比素材”入口（后端对接预留）
+   *
+   * 当前状态：
+   * - 仅保留函数入口，不执行真实请求
+   * - 目的是固定后续联调挂点，避免功能上来后分散到多个 UI 组件里
+   *
+   * 推荐后端接入步骤（函数调用优先）：
+   * 1. application 层新增 `SyncCompareNodeMediaUseCase`
+   * 2. 在该 use case 中统一处理参数校验、素材读取、错误转换
+   * 3. infrastructure 层适配 Tauri/Rust 实际能力
+   * 4. 回到这里用 `setCanvasNodes` 更新 compare 节点数据（status/media/error）
+   *
+   * 后续新增音频时：
+   * - 保持函数签名不变
+   * - 在返回 payload 中新增 `kind: 'audio'`
+   * - 由 CompareNodeCard 渲染分支扩展即可
+   */
+  const handleRequestSyncCompareMedia = useCallback((nodeId: string) => {
+    console.info('[UI Placeholder] 对比节点请求同步素材，待接后端函数。', { nodeId });
+  }, []);
+
+  /**
    * 图片节点提示词草稿更新
    *
    * 当前版本：
@@ -631,6 +977,25 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     handleRequestUpload(targetNodeId, selectedFiles);
     event.currentTarget.value = '';
   }, [handleRequestUpload]);
+
+  /**
+   * 画布渲染用节点（派生数据）
+   *
+   * 关键点：
+   * - 这里不直接改 `canvasNodes` 状态
+   * - 只在渲染前根据“连线 + 上传素材”做一次派生映射
+   *
+   * 这样做的好处：
+   * - 避免在 effect 中 setState 造成级联渲染
+   * - 保持源状态（用户操作状态）和展示状态（派生对比视图）职责分离
+   *
+   * 后续接后端时：
+   * - 如果改为后端下发最终对比结果，这里可直接简化为 `canvasNodes`
+   */
+  const renderedCanvasNodes = useMemo(
+    () => syncCompareNodesByConnections(canvasNodes, canvasEdges),
+    [canvasEdges, canvasNodes, syncCompareNodesByConnections],
+  );
 
   /**
    * 维护最新节点快照，供卸载时清理预览 URL。
@@ -793,6 +1158,52 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     ]);
     setContextMenu((previous) => ({ ...previous, visible: false }));
   }, [contextMenu.canvasX, contextMenu.canvasY, handleRemoveNode, handleRequestSyncPreview]);
+
+  /**
+   * 创建“对比”节点
+   *
+   * 对应右键菜单中的“对比”按钮。
+   * 当前只做前端卡片设计与基础交互，不接后端真实素材。
+   *
+   * 节点生命周期建议（后续实现）：
+   * - 初始创建：`compareStatus = 'empty'`
+   * - 后端素材就绪：更新为 `compareStatus = 'ready'` 并写入 `compareMedia`
+   * - 删除节点：统一走 `onRequestRemove` 回调，在装配层处理资源清理
+   *
+   * 重构建议：
+   * - 如果未来出现更多创建参数（模板、来源、对齐策略），
+   *   建议提炼 `buildCompareNodeData()` 工厂函数，避免当前函数持续膨胀
+   */
+  const createCompareNodeFromContextMenu = useCallback(() => {
+    const nodeId = `compare-${nodeSequenceRef.current}`;
+    nodeSequenceRef.current += 1;
+
+    const nextNode: CompareWorkflowNode = {
+      id: nodeId,
+      type: COMPARE_NODE_TYPE,
+      selected: true,
+      position: {
+        // 原型默认尺寸约 380x240，创建时将点击点放在卡片几何中心附近。
+        x: Math.max(0, contextMenu.canvasX - DEFAULT_COMPARE_NODE_CARD_WIDTH / 2),
+        y: Math.max(0, contextMenu.canvasY - DEFAULT_COMPARE_NODE_CARD_HEIGHT / 2),
+      },
+      data: {
+        title: '图片对比',
+        emptyHintText: '连接图片以对比',
+        cardWidth: DEFAULT_COMPARE_NODE_CARD_WIDTH,
+        cardHeight: DEFAULT_COMPARE_NODE_CARD_HEIGHT,
+        compareStatus: 'empty',
+        onRequestRemove: handleRemoveNode,
+        onRequestSyncCompareMedia: handleRequestSyncCompareMedia,
+      },
+    };
+
+    setCanvasNodes((previousNodes) => [
+      ...previousNodes.map((node) => ({ ...node, selected: false })),
+      nextNode,
+    ]);
+    setContextMenu((previous) => ({ ...previous, visible: false }));
+  }, [contextMenu.canvasX, contextMenu.canvasY, handleRemoveNode, handleRequestSyncCompareMedia]);
 
   /**
    * 存储管理弹窗状态
@@ -1116,6 +1527,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
             当前版本已完成：
             - 右键菜单点击“上传文件”后创建节点卡片
             - 右键菜单点击“预览”后创建预览节点卡片
+            - 右键菜单点击“对比”后创建对比节点卡片
             - 节点可拖拽、可选中、可删除
             - 节点内“选择文件”按钮预留后端调用入口
 
@@ -1130,7 +1542,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
             3. 最后在右键菜单或工具栏接入创建动作
           */}
           <CanvasNodeLayer
-            nodes={canvasNodes}
+            nodes={renderedCanvasNodes}
             edges={canvasEdges}
             onNodesChange={handleCanvasNodesChange}
             onEdgesChange={handleCanvasEdgesChange}
@@ -1307,7 +1719,10 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
               <svg className="w-4 h-4 text-gray-400 group-hover:text-white mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
               <span className="text-[13px] text-gray-300 group-hover:text-white">预览</span>
             </button>
-            <button className="flex items-center px-3 py-1.5 hover:bg-white/5 rounded-md group transition-colors">
+            <button
+              onClick={createCompareNodeFromContextMenu}
+              className="flex items-center px-3 py-1.5 hover:bg-white/5 rounded-md group transition-colors"
+            >
               <svg className="w-4 h-4 text-gray-400 group-hover:text-white mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
               <span className="text-[13px] text-gray-300 group-hover:text-white">对比</span>
             </button>

@@ -13,6 +13,7 @@ import { type Node } from '@xyflow/react';
 export const FILE_UPLOAD_NODE_TYPE = 'fileUpload';
 export const IMAGE_GENERATION_NODE_TYPE = 'imageGeneration';
 export const PREVIEW_NODE_TYPE = 'preview';
+export const COMPARE_NODE_TYPE = 'compare';
 
 /**
  * 前端文件展示摘要
@@ -146,6 +147,78 @@ export type ImageGenerationWorkflowNode = Node<
 >;
 
 /**
+ * 对比节点数据契约
+ *
+ * 职责边界（给新手）：
+ * - 这里只描述“对比节点 UI 需要哪些数据”
+ * - 不在这里写后端调用细节、权限、计费、审核等业务规则
+ *
+ * 当前实现状态：
+ * - 本次先实现“空状态卡片视觉”
+ * - 真实图片/视频对比内容属于后续增量功能
+ *
+ * 未来扩展建议（图片/视频/音频）：
+ * 1. 先扩展 `compareMedia`，使用 `kind` 区分类型
+ * 2. 再在卡片组件里按 `kind` 分支渲染 image/video/audio UI
+ * 3. 复杂 UI（滑块、波形、时间轴）优先拆子组件，避免单文件膨胀
+ *
+ * 删除与重构建议：
+ * - 删除统一走 `onRequestRemove(nodeId)` 上抛，不要让卡片组件直接改全局状态
+ * - 当字段数量明显增长时，建议拆成 `CompareMediaPayload`、`CompareState`、`CompareActions`
+ */
+export interface CompareNodeData extends Record<string, unknown> {
+  title: string;
+  emptyHintText: string;
+  cardWidth?: number;
+  cardHeight?: number;
+  /**
+   * 对比内容状态（当前默认 `empty`）
+   *
+   * - `empty`: 还未接入对比素材
+   * - `ready`: 已有可展示的对比内容（后续实现）
+   */
+  compareStatus?: 'empty' | 'ready';
+  /**
+   * 后续真实对比内容载荷（当前只作为预留契约，不在本次实现中渲染）
+   *
+   * 推荐说明：
+   * - leftMedia: 原始素材
+   * - rightMedia: 结果素材
+   * - `kind` 统一媒体类型，便于前端分支渲染与后端参数对齐
+   */
+  compareMedia?: {
+    kind: 'image' | 'video' | 'audio';
+    leftMediaUrl: string;
+    rightMediaUrl: string;
+    leftMimeType: string;
+    rightMimeType: string;
+    leftLabel?: string;
+    rightLabel?: string;
+  };
+  /**
+   * 对比节点错误文案（前端可直接展示）
+   *
+   * 典型场景：
+   * - 连入了不足两路素材
+   * - 两路素材媒体类型不一致（例如 image + video）
+   */
+  compareErrorMessage?: string;
+  onRequestRemove?: (nodeId: string) => void;
+  /**
+   * 请求同步对比素材（后端联调入口）
+   *
+   * 推荐链路：
+   * CompareNodeCard -> CanvasBoard -> application use case -> infrastructure(Tauri/Rust)
+   */
+  onRequestSyncCompareMedia?: (nodeId: string) => void;
+}
+
+/**
+ * 画布内“对比节点”的强类型定义
+ */
+export type CompareWorkflowNode = Node<CompareNodeData, typeof COMPARE_NODE_TYPE>;
+
+/**
  * 预览节点数据契约
  *
  * 这一层仍属于展示层（presentation）：
@@ -233,4 +306,5 @@ export type PreviewWorkflowNode = Node<PreviewNodeData, typeof PREVIEW_NODE_TYPE
 export type CanvasWorkflowNode =
   | FileUploadWorkflowNode
   | ImageGenerationWorkflowNode
-  | PreviewWorkflowNode;
+  | PreviewWorkflowNode
+  | CompareWorkflowNode;
