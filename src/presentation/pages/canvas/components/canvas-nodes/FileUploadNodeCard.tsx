@@ -1,7 +1,13 @@
 "use client";
 
 import React, { useEffect, useRef } from 'react';
-import { Handle, NodeProps, Position, useUpdateNodeInternals } from '@xyflow/react';
+import {
+  Handle,
+  NodeProps,
+  Position,
+  useNodeConnections,
+  useUpdateNodeInternals,
+} from '@xyflow/react';
 import { type FileUploadWorkflowNode } from './types';
 
 /**
@@ -47,6 +53,21 @@ export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadW
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const firstAsset = data.selectedAssets?.[0];
   const hasSelectedAssets = Boolean(data.selectedAssets && data.selectedAssets.length > 0);
+  const incomingConnectionsOnInputHandle = useNodeConnections({
+    id,
+    handleType: 'target',
+    handleId: 'input',
+  });
+  const hasIncomingSourceOnInputHandle = incomingConnectionsOnInputHandle.length > 0;
+  /**
+   * 输入点显示规则（按你最新需求）：
+   * 1. 卡片激活时显示；
+   * 2. 即使卡片未激活，只要输入点已有上游连线，也保持显示。
+   *
+   * 目的：
+   * - 让用户在画布缩放/切换选中后，仍能快速看出“该节点已接入输入来源”。
+   */
+  const shouldShowInputHandle = isNodeActive || hasIncomingSourceOnInputHandle;
   const cardWidth = data.cardWidth ?? 320;
   const cardHeight = data.cardHeight ?? 320;
   const isImageAsset = Boolean(firstAsset && firstAsset.mimeType.startsWith('image/'));
@@ -66,7 +87,7 @@ export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadW
    */
   useEffect(() => {
     updateNodeInternals(id);
-  }, [id, isNodeActive, cardWidth, cardHeight, updateNodeInternals]);
+  }, [id, isNodeActive, shouldShowInputHandle, cardWidth, cardHeight, updateNodeInternals]);
 
   /**
    * 上传按钮点击处理
@@ -149,14 +170,19 @@ export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadW
         id="input"
         position={Position.Left}
         style={{
-          width: isNodeActive ? 16 : 0,
-          height: isNodeActive ? 16 : 0,
-          background: isNodeActive ? '#686b70' : 'transparent',
-          border: isNodeActive ? '4px solid #b7b9be' : '0px solid transparent',
+          top: '50%',
+          left: isNodeActive ? -7 : -6,
+          transform: 'translate(0, -50%)',
+          width: 12,
+          height: 12,
+          background: isNodeActive ? '#71717a' : '#52525b',
+          border: isNodeActive ? '2px solid #18181b' : '1px solid #18181b',
           borderRadius: '999px',
-          boxShadow: isNodeActive ? '0 0 8px rgba(0, 0, 0, 0.35)' : 'none',
-          opacity: isNodeActive ? 1 : 0,
-          pointerEvents: isNodeActive ? 'auto' : 'none',
+          boxShadow: isNodeActive ? '0 0 8px rgba(255, 255, 255, 0.18)' : 'none',
+          opacity: shouldShowInputHandle ? 1 : 0,
+          pointerEvents: shouldShowInputHandle ? 'auto' : 'none',
+          zIndex: 30,
+          transition: 'all 0.2s ease',
         }}
       />
 
@@ -165,14 +191,19 @@ export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadW
         id="output"
         position={Position.Right}
         style={{
-          width: isNodeActive ? 16 : 0,
-          height: isNodeActive ? 16 : 0,
-          background: isNodeActive ? '#686b70' : 'transparent',
-          border: isNodeActive ? '4px solid #b7b9be' : '0px solid transparent',
+          top: '50%',
+          right: isNodeActive ? -7 : -6,
+          transform: 'translate(0, -50%)',
+          width: 12,
+          height: 12,
+          background: isNodeActive ? '#71717a' : '#52525b',
+          border: isNodeActive ? '2px solid #18181b' : '1px solid #18181b',
           borderRadius: '999px',
-          boxShadow: isNodeActive ? '0 0 8px rgba(0, 0, 0, 0.35)' : 'none',
+          boxShadow: isNodeActive ? '0 0 8px rgba(255, 255, 255, 0.18)' : 'none',
           opacity: isNodeActive ? 1 : 0,
           pointerEvents: isNodeActive ? 'auto' : 'none',
+          zIndex: 30,
+          transition: 'all 0.2s ease',
         }}
       />
 

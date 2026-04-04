@@ -6,6 +6,7 @@ import {
   type NodeProps,
   Position,
   useConnection,
+  useNodeConnections,
   useUpdateNodeInternals,
 } from '@xyflow/react';
 import { type CompareWorkflowNode } from './types';
@@ -118,6 +119,19 @@ export function CompareNodeCard({ id, data, selected }: NodeProps<CompareWorkflo
   const isImageCompare = isReady && compareMedia?.kind === 'image';
   const isVideoCompare = isReady && compareMedia?.kind === 'video';
   const isAudioCompare = isReady && compareMedia?.kind === 'audio';
+  const incomingConnectionsOnInputHandle = useNodeConnections({
+    id,
+    handleType: 'target',
+    handleId: 'input',
+  });
+  const hasIncomingSourceOnInputHandle = incomingConnectionsOnInputHandle.length > 0;
+  /**
+   * 输入点显示规则（与上传节点保持一致）：
+   * 1. 节点激活时显示；
+   * 2. 节点未激活但输入点已有上游来源时，也保持显示；
+   * 3. 其余情况隐藏。
+   */
+  const shouldShowInputHandle = isNodeActive || hasIncomingSourceOnInputHandle;
   const connectionPreview = useConnection((connection) => {
     if (!connection.inProgress || !connection.fromNode) {
       return {
@@ -178,7 +192,7 @@ export function CompareNodeCard({ id, data, selected }: NodeProps<CompareWorkflo
    */
   useEffect(() => {
     updateNodeInternals(id);
-  }, [cardHeight, cardWidth, id, isNodeActive, isReady, updateNodeInternals]);
+  }, [cardHeight, cardWidth, id, isNodeActive, isReady, shouldShowInputHandle, updateNodeInternals]);
 
   /**
    * 删除动作上抛：
@@ -281,7 +295,8 @@ export function CompareNodeCard({ id, data, selected }: NodeProps<CompareWorkflo
           border: isNodeActive ? '2px solid #18181b' : '1px solid #18181b',
           borderRadius: '999px',
           boxShadow: isNodeActive ? '0 0 8px rgba(255, 255, 255, 0.18)' : 'none',
-          opacity: 1,
+          opacity: shouldShowInputHandle ? 1 : 0,
+          pointerEvents: shouldShowInputHandle ? 'auto' : 'none',
           zIndex: 30,
           transition: 'all 0.2s ease',
         }}
