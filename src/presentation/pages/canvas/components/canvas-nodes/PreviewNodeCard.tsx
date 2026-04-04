@@ -5,6 +5,7 @@ import {
   Handle,
   type NodeProps,
   Position,
+  useConnection,
   useNodeConnections,
   useUpdateNodeInternals,
 } from '@xyflow/react';
@@ -108,6 +109,43 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
    * - 输出点仍保持“仅激活态显示”。
    */
   const shouldShowInputHandle = isNodeActive || hasIncomingSourceOnInputHandle;
+  const connectionPreview = useConnection((connection) => {
+    if (!connection.inProgress || !connection.fromNode) {
+      return {
+        inProgress: false,
+        fromNodeId: null as string | null,
+        toNodeId: null as string | null,
+        toHandleId: null as string | null,
+      };
+    }
+
+    return {
+      inProgress: true,
+      fromNodeId: connection.fromNode.id,
+      toNodeId: connection.toNode?.id ?? null,
+      toHandleId: connection.toHandle?.id ?? null,
+    };
+  });
+
+  /**
+   * 连线命中输入点时显示上下流光（拖线未松手）
+   *
+   * 触发条件（对齐对比卡片）：
+   * 1. 正在拖线；
+   * 2. 当前目标命中本节点 input handle；
+   * 3. 非自己连接自己。
+   */
+  const showConnectionMergeGlow = useMemo(() => {
+    if (!connectionPreview.inProgress) {
+      return false;
+    }
+
+    if (connectionPreview.fromNodeId === id) {
+      return false;
+    }
+
+    return connectionPreview.toNodeId === id && connectionPreview.toHandleId === 'input';
+  }, [connectionPreview.fromNodeId, connectionPreview.inProgress, connectionPreview.toHandleId, connectionPreview.toNodeId, id]);
 
   /**
    * 当节点尺寸或选中态变化时，刷新 React Flow 内部几何缓存。
@@ -199,6 +237,13 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
         }}
       />
 
+      {showConnectionMergeGlow && (
+        <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-[14px]">
+          <div className="preview-node-merge-glint preview-node-merge-glint-top" />
+          <div className="preview-node-merge-glint preview-node-merge-glint-bottom" />
+        </div>
+      )}
+
       {hovered && (
         <button
           type="button"
@@ -250,6 +295,48 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
         <p className="text-[15px] tracking-wide text-[#999999]">{data.primaryHintText}</p>
         <p className="mt-3 text-[13px] tracking-wide text-[#666666]">{data.secondaryHintText}</p>
       </div>
+
+      <style jsx>{`
+        @keyframes preview-node-glint-slide {
+          0% {
+            transform: translateX(-52%);
+            opacity: 0.12;
+          }
+          50% {
+            opacity: 0.92;
+          }
+          100% {
+            transform: translateX(52%);
+            opacity: 0.16;
+          }
+        }
+
+        .preview-node-merge-glint {
+          position: absolute;
+          left: -26%;
+          width: 152%;
+          height: 2px;
+          background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.06) 18%,
+            rgba(255, 255, 255, 0.92) 50%,
+            rgba(255, 255, 255, 0.06) 82%,
+            rgba(255, 255, 255, 0) 100%
+          );
+          filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.35));
+          animation: preview-node-glint-slide 1.2s ease-in-out infinite;
+        }
+
+        .preview-node-merge-glint-top {
+          top: 0;
+        }
+
+        .preview-node-merge-glint-bottom {
+          bottom: 0;
+          animation-delay: 0.14s;
+        }
+      `}</style>
     </div>
   );
 }
