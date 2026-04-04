@@ -4,11 +4,14 @@ import React from 'react';
 import {
   ConnectionLineType,
   type Edge,
+  MiniMap,
   type OnConnect,
   type OnEdgesChange,
+  type OnMove,
   ReactFlow,
   type NodeTypes,
   type OnNodesChange,
+  type Viewport,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { CompareNodeCard } from './CompareNodeCard';
@@ -70,6 +73,24 @@ interface CanvasNodeLayerProps {
    * 节点连接回调（用户从连接点拖线并完成连接）
    */
   onConnect: OnConnect;
+
+  /**
+   * 初始视口（平移 + 缩放）
+   *
+   * 说明：
+   * - 由上层传入默认值，保持历史初始视角体验
+   * - 后续实际拖拽/缩放由 React Flow 内部接管
+   */
+  initialViewport: Viewport;
+
+  /**
+   * 视口变更回调（平移、滚轮缩放）
+   *
+   * 上层用它来同步：
+   * - 右键菜单坐标换算
+   * - 画布外层辅助 UI（如浮动工具栏）
+   */
+  onViewportChange: (viewport: Viewport) => void;
 }
 
 /**
@@ -87,9 +108,18 @@ export function CanvasNodeLayer({
   onNodesChange,
   onEdgesChange,
   onConnect,
+  initialViewport,
+  onViewportChange,
 }: CanvasNodeLayerProps) {
+  const handleMove = React.useCallback<OnMove>(
+    (_, viewport) => {
+      onViewportChange(viewport);
+    },
+    [onViewportChange],
+  );
+
   return (
-    <div className="canvas-node-layer w-[3200px] h-[2200px]">
+    <div className="canvas-node-layer w-full h-full">
       <style jsx global>{`
         @keyframes canvas-connection-dash-flow {
           to {
@@ -116,6 +146,18 @@ export function CanvasNodeLayer({
           animation: canvas-connection-dash-flow 0.5s linear infinite;
           fill: none;
         }
+
+        .canvas-node-layer .react-flow__minimap {
+          cursor: default;
+        }
+
+        .canvas-node-layer .react-flow__minimap-mask {
+          cursor: grab;
+        }
+
+        .canvas-node-layer .react-flow__minimap-mask:active {
+          cursor: grabbing;
+        }
       `}</style>
 
       {/*
@@ -129,6 +171,8 @@ export function CanvasNodeLayer({
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        defaultViewport={initialViewport}
+        onMove={handleMove}
         connectionLineType={ConnectionLineType.Bezier}
         connectionLineStyle={{
           stroke: '#737373',
@@ -144,13 +188,26 @@ export function CanvasNodeLayer({
         }}
         className="!bg-transparent"
         proOptions={{ hideAttribution: true }}
-        panOnDrag={false}
-        zoomOnScroll={false}
-        zoomOnPinch={false}
+        panOnDrag
+        zoomOnScroll
+        zoomOnPinch
         zoomOnDoubleClick={false}
-        minZoom={1}
-        maxZoom={1}
-      />
+        minZoom={0.4}
+        maxZoom={1.8}
+      >
+        <MiniMap
+          pannable
+          style={{
+            backgroundColor: '#1C1C1E',
+            borderRadius: 8,
+            border: '1px solid #333',
+          }}
+          nodeColor="#5C5C5E"
+          maskColor="rgba(0, 0, 0, 0.7)"
+          maskStrokeColor="#E5E7EB"
+          maskStrokeWidth={1.2}
+        />
+      </ReactFlow>
     </div>
   );
 }

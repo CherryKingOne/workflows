@@ -9,6 +9,7 @@ import {
   type Edge,
   type OnEdgesChange,
   type OnNodesChange,
+  type Viewport,
 } from '@xyflow/react';
 import { useRouter } from 'next/navigation';
 import { Project } from '../../../../domain/project/entities/Project';
@@ -51,6 +52,7 @@ const DEFAULT_IMAGE_NODE_EXPANDED_HEIGHT = 420;
 const DEFAULT_IMAGE_NODE_COLLAPSED_HEIGHT = 88;
 const DEFAULT_PREVIEW_NODE_CARD_WIDTH = 540;
 const DEFAULT_PREVIEW_NODE_CARD_HEIGHT = 340;
+const INITIAL_CANVAS_VIEWPORT: Viewport = { x: -1500, y: -1200, zoom: 1 };
 /**
  * 动态卡片尺寸边界（按当前视觉稿收敛）
  *
@@ -404,40 +406,15 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   const toolbarUploadTargetNodeIdRef = useRef<string | null>(null);
   
   /**
-   * 画布拖拽状态
+   * 画布视口状态（React Flow viewport）
    *
-   * 这是最基础的交互状态之一，用来控制用户是否正在拖动整张画布。
-   * 后续如果要支持：
-   * - 触控板拖拽
-   * - 触摸手势
-   * - 空格键拖动画布
-   * - 缩放后的拖拽修正
-   * 可以继续围绕这一组状态演进，但建议逐步抽离到专门的交互 hook 中。
+   * 说明：
+   * - x / y：当前平移偏移量
+   * - zoom：当前缩放比例
+   *
+   * 这组状态由 React Flow 原生交互驱动（拖拽平移、滚轮缩放、小地图拖拽）。
    */
-  const [isDragging, setIsDragging] = useState(false);
-
-  /**
-   * 画布逻辑坐标
-   *
-   * `position` 控制当前画布内容相对视口的偏移量。
-   * 简单理解就是“用户已经把整张画布拖到了哪里”。
-   *
-   * 后续如果加入：
-   * - 缩放
-   * - 自动聚焦到某个节点
-   * - 小地图联动
-   * - 恢复上次视图位置
-   * 这组状态会继续扩展为更完整的 viewport / camera 概念。
-   */
-  const [position, setPosition] = useState({ x: -1500, y: -1200 });
-
-  /**
-   * 拖拽起点缓存
-   *
-   * 用 ref 而不是 state，是因为这里只需要跨事件保存即时数据，
-   * 不需要每次修改都触发重新渲染。
-   */
-  const dragStartRef = useRef({ x: 0, y: 0 });
+  const [viewport, setViewport] = useState<Viewport>(INITIAL_CANVAS_VIEWPORT);
 
   /**
    * 右键菜单状态
@@ -671,10 +648,11 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   const activeToolbarAnchor = activeUploadedNode
     ? {
         x:
-          position.x +
-          activeUploadedNode.position.x +
-          (activeUploadedNode.data.cardWidth ?? DEFAULT_FILE_UPLOAD_CARD_WIDTH) / 2,
-        y: position.y + activeUploadedNode.position.y,
+          viewport.x +
+          (activeUploadedNode.position.x +
+            (activeUploadedNode.data.cardWidth ?? DEFAULT_FILE_UPLOAD_CARD_WIDTH) / 2) *
+            viewport.zoom,
+        y: viewport.y + activeUploadedNode.position.y * viewport.zoom,
       }
     : null;
 
@@ -1309,65 +1287,16 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   } = useStorage(true); // true = 使用 Mock 数据，后端对接时改为 false
 
   /**
-   * 处理鼠标按下
+   * 同步 React Flow 视口（平移/缩放）
    *
-   * 这里只允许在真正的画布背景区域开始拖拽。
-   * 如果点击的是顶部导航、固定 UI、右键菜单等交互区，则不触发画布拖动。
-   *
-   * 这是非常重要的边界判断：
-   * 画布层和浮层 UI 必须解耦，否则用户会在点击按钮时误拖动画布。
+   * 说明：
+   * - 小地图拖拽、画布拖拽、滚轮缩放都会触发该回调
+   * - 上层保存一份视口状态，供“右键落点换算 / 悬浮工具栏定位”等 UI 使用
    */
-  const handleMouseDown = (e: React.MouseEvent) => {
-    // 忽略点击在 UI 元素上的拖拽，只允许在画布背景上拖拽
-    if (
-      (e.target as Element).closest('header') ||
-      (e.target as Element).closest('.fixed-ui') ||
-      (e.target as Element).closest('#context-menu') ||
-      (e.target as Element).closest('.react-flow__node')
-    ) {
-      return;
-    }
-    // 左键拖拽，右键显示菜单（这里屏蔽掉左键点击直接显示菜单的行为，改为右键或者后续通过别的交互显示）
-    if (e.button !== 0) return;
-
-    setIsDragging(true);
-    setContextMenu(prev => ({ ...prev, visible: false })); // 开始拖拽时隐藏菜单
-    
-    dragStartRef.current = {
-      x: e.clientX - position.x,
-      y: e.clientY - position.y
-    };
-  };
-
-  /**
-   * 处理鼠标移动
-   *
-   * 当前逻辑非常纯粹：
-   * 只要处于拖拽中，就实时更新画布位置。
-   *
-   * 如果未来要加入性能优化，可以考虑：
-   * - requestAnimationFrame 节流
-   * - 更独立的 viewport reducer
-   * - 拖拽与缩放统一状态机
-   */
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    setPosition({
-      x: e.clientX - dragStartRef.current.x,
-      y: e.clientY - dragStartRef.current.y
-    });
-  };
-
-  /**
-   * 结束拖拽
-   *
-   * 当前只负责关闭拖拽状态。
-   * 后续如果需要记录埋点、保存视口位置、触发吸附或边界回弹，
-   * 可以在这里或提取后的交互 hook 中扩展。
-   */
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
+  const handleViewportChange = useCallback((nextViewport: Viewport) => {
+    setViewport(nextViewport);
+    setContextMenu((previous) => (previous.visible ? { ...previous, visible: false } : previous));
+  }, []);
 
   /**
    * 打开右键菜单
@@ -1380,12 +1309,15 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     if ((e.target as Element).closest('header') || (e.target as Element).closest('.fixed-ui')) {
       return;
     }
+
+    const canvasX = (e.clientX - viewport.x) / viewport.zoom;
+    const canvasY = (e.clientY - viewport.y) / viewport.zoom;
     
     setContextMenu({
       x: e.clientX,
       y: e.clientY,
-      canvasX: e.clientX - position.x,
-      canvasY: e.clientY - position.y,
+      canvasX,
+      canvasY,
       visible: true
     });
   };
@@ -1394,7 +1326,6 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * 全局事件绑定
    *
    * 这里处理的是“超出组件局部范围也要生效”的页面级交互：
-   * - 鼠标抬起时结束拖拽
    * - 点击空白关闭右键菜单
    * - ESC 关闭菜单和弹窗
    *
@@ -1408,8 +1339,6 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * 这样的细分 hook，而不是继续把所有事件堆在一个 effect 里。
    */
   useEffect(() => {
-    const handleGlobalMouseUp = () => setIsDragging(false);
-    
     // 点击空白处关闭菜单
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Element;
@@ -1425,12 +1354,10 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       }
     };
 
-    window.addEventListener('mouseup', handleGlobalMouseUp);
     window.addEventListener('click', handleClickOutside);
     window.addEventListener('keydown', handleEsc);
     
     return () => {
-      window.removeEventListener('mouseup', handleGlobalMouseUp);
       window.removeEventListener('click', handleClickOutside);
       window.removeEventListener('keydown', handleEsc);
     };
@@ -1452,11 +1379,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       {/* 1. 画布背景容器 (Canvas Layer) */}
       {/* ========================================================= */}
       <div 
-        className={`absolute inset-0 overflow-hidden transition-cursor duration-75 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'} bg-black`}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
+        className="absolute inset-0 overflow-hidden bg-black"
         onContextMenu={handleContextMenu}
       >
         {/* 光滑玻璃底板反光层 - 增强反光与光泽 */}
@@ -1471,9 +1394,9 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
         <div
           className="absolute inset-0 pointer-events-none z-0"
           style={{
-            backgroundPosition: `${position.x}px ${position.y}px`,
+            backgroundPosition: `${viewport.x}px ${viewport.y}px`,
             backgroundImage: 'radial-gradient(circle, rgba(255, 255, 255, 0.4) 1.5px, transparent 1.5px)',
-            backgroundSize: '24px 24px',
+            backgroundSize: `${24 * viewport.zoom}px ${24 * viewport.zoom}px`,
           }}
         />
 
@@ -1514,13 +1437,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
           “新建独立模块，然后在当前主画布中调用它”
           而不是把所有视觉实现都直接写死在当前文件。
         */}
-        <div 
-          className="absolute z-10" 
-          style={{ 
-            left: `${position.x}px`, 
-            top: `${position.y}px`,
-          }}
-        >
+        <div className="absolute inset-0 z-10">
           {/* 
             节点渲染层（已接入 React Flow）
 
@@ -1547,6 +1464,8 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
             onNodesChange={handleCanvasNodesChange}
             onEdgesChange={handleCanvasEdgesChange}
             onConnect={handleConnect}
+            initialViewport={INITIAL_CANVAS_VIEWPORT}
+            onViewportChange={handleViewportChange}
           />
         </div>
       </div>
@@ -1624,20 +1543,12 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       </header>
 
       {/* ========================================================= */}
-      {/* 3. 左下角帮助 & 右下角导航小地图 */}
+      {/* 3. 左下角帮助 */}
       {/* ========================================================= */}
       <div className="fixed bottom-4 left-4 z-20 fixed-ui">
         <button className="w-8 h-8 bg-[#171717]/80 backdrop-blur-md border border-white/10 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors shadow-lg text-white">
           <span className="text-xs font-medium">?</span>
         </button>
-      </div>
-
-      <div className="fixed bottom-4 right-4 z-20 fixed-ui pointer-events-none">
-        <div className="w-48 h-28 bg-[#171717]/80 backdrop-blur-md rounded-lg border border-white/10 relative overflow-hidden shadow-lg">
-          <div className="absolute inset-0 opacity-20" style={{backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '10px 10px'}}></div>
-          {/* 当前视口框指示器 */}
-          <div className="absolute bottom-2 right-2 w-12 h-8 border border-white/40 bg-white/5 rounded-sm"></div>
-        </div>
       </div>
 
       {/*
