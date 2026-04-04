@@ -79,6 +79,7 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
     handleId: 'input',
   });
   const hasIncomingSourceOnInputHandle = incomingConnectionsOnInputHandle.length > 0;
+  const isInputHandleConnected = hasIncomingSourceOnInputHandle;
   /**
    * 输入点显示规则（按你当前要求）：
    * 1. 节点激活时显示；
@@ -186,14 +187,22 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
         position={Position.Left}
         style={{
           top: `${handleTopOffset}px`,
-          left: isNodeActive ? -7 : -6,
+          left: isInputHandleConnected ? -5 : isNodeActive ? -7 : -6,
           transform: 'translate(0, -50%)',
-          width: 12,
-          height: 12,
-          background: isNodeActive ? '#71717a' : '#52525b',
-          border: isNodeActive ? '2px solid #18181b' : '1px solid #18181b',
+          width: isInputHandleConnected ? 10 : 12,
+          height: isInputHandleConnected ? 10 : 12,
+          background: isInputHandleConnected ? '#ffffff' : isNodeActive ? '#71717a' : '#52525b',
+          border: isInputHandleConnected
+            ? '1px solid #18181b'
+            : isNodeActive
+              ? '2px solid #18181b'
+              : '1px solid #18181b',
           borderRadius: '999px',
-          boxShadow: isNodeActive ? '0 0 8px rgba(255, 255, 255, 0.18)' : 'none',
+          boxShadow: isInputHandleConnected
+            ? '0 0 8px rgba(255, 255, 255, 0.8)'
+            : isNodeActive
+              ? '0 0 8px rgba(255, 255, 255, 0.18)'
+              : 'none',
           opacity: shouldShowInputHandle ? 1 : 0,
           pointerEvents: shouldShowInputHandle ? 'auto' : 'none',
           zIndex: 30,
