@@ -11,7 +11,7 @@ import {
 } from '@xyflow/react';
 import { type PreviewWorkflowNode } from './types';
 
-const DEFAULT_CARD_WIDTH = 540;
+const DEFAULT_CARD_WIDTH = 500;
 const DEFAULT_CARD_HEIGHT = 340;
 const MIN_CARD_WIDTH = 420;
 const MAX_CARD_WIDTH = 640;
