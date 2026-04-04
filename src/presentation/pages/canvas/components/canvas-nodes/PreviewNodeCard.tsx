@@ -1,7 +1,13 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Handle, type NodeProps, Position, useUpdateNodeInternals } from '@xyflow/react';
+import {
+  Handle,
+  type NodeProps,
+  Position,
+  useNodeConnections,
+  useUpdateNodeInternals,
+} from '@xyflow/react';
 import { type PreviewWorkflowNode } from './types';
 
 const DEFAULT_CARD_WIDTH = 540;
@@ -85,6 +91,22 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
   }, [data.cardHeight]);
 
   const isNodeActive = Boolean(selected);
+  const incomingConnectionsOnInputHandle = useNodeConnections({
+    id,
+    handleType: 'target',
+    handleId: 'input',
+  });
+  const hasIncomingSourceOnInputHandle = incomingConnectionsOnInputHandle.length > 0;
+  /**
+   * 输入点显示规则（按你的统一要求）：
+   * 1. 节点激活时显示；
+   * 2. 节点未激活但输入点已有来源时，也保持显示。
+   *
+   * 注意：
+   * - 该规则仅作用于输入点；
+   * - 输出点仍保持“仅激活态显示”。
+   */
+  const shouldShowInputHandle = isNodeActive || hasIncomingSourceOnInputHandle;
 
   /**
    * 当节点尺寸或选中态变化时，刷新 React Flow 内部几何缓存。
@@ -93,7 +115,7 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
    */
   useEffect(() => {
     updateNodeInternals(id);
-  }, [cardHeight, cardWidth, id, isNodeActive, updateNodeInternals]);
+  }, [cardHeight, cardWidth, id, isNodeActive, shouldShowInputHandle, updateNodeInternals]);
 
   /**
    * 删除节点入口（只做事件上抛，不直接改全局状态）
@@ -132,16 +154,16 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
         position={Position.Left}
         style={{
           top: '50%',
-          left: -7,
+          left: isNodeActive ? -7 : -6,
           transform: 'translate(0, -50%)',
-          width: isNodeActive ? 14 : 0,
-          height: isNodeActive ? 14 : 0,
-          background: isNodeActive ? '#5f6166' : 'transparent',
-          border: isNodeActive ? '2px solid #a3a3a3' : '0px solid transparent',
+          width: 12,
+          height: 12,
+          background: isNodeActive ? '#71717a' : '#52525b',
+          border: isNodeActive ? '2px solid #18181b' : '1px solid #18181b',
           borderRadius: '999px',
-          boxShadow: isNodeActive ? '0 0 8px rgba(0, 0, 0, 0.4)' : 'none',
-          opacity: isNodeActive ? 1 : 0,
-          pointerEvents: isNodeActive ? 'auto' : 'none',
+          boxShadow: isNodeActive ? '0 0 8px rgba(255, 255, 255, 0.18)' : 'none',
+          opacity: shouldShowInputHandle ? 1 : 0,
+          pointerEvents: shouldShowInputHandle ? 'auto' : 'none',
           zIndex: 30,
           transition: 'all 0.2s ease',
         }}
@@ -153,14 +175,14 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
         position={Position.Right}
         style={{
           top: '50%',
-          right: -7,
+          right: isNodeActive ? -7 : -6,
           transform: 'translate(0, -50%)',
-          width: isNodeActive ? 14 : 0,
-          height: isNodeActive ? 14 : 0,
-          background: isNodeActive ? '#5f6166' : 'transparent',
-          border: isNodeActive ? '2px solid #a3a3a3' : '0px solid transparent',
+          width: 12,
+          height: 12,
+          background: isNodeActive ? '#71717a' : '#52525b',
+          border: isNodeActive ? '2px solid #18181b' : '1px solid #18181b',
           borderRadius: '999px',
-          boxShadow: isNodeActive ? '0 0 8px rgba(0, 0, 0, 0.4)' : 'none',
+          boxShadow: isNodeActive ? '0 0 8px rgba(255, 255, 255, 0.18)' : 'none',
           opacity: isNodeActive ? 1 : 0,
           pointerEvents: isNodeActive ? 'auto' : 'none',
           zIndex: 30,
