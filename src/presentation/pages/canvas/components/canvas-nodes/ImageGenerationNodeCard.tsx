@@ -5,6 +5,7 @@ import {
   Handle,
   NodeProps,
   Position,
+  useConnection,
   useNodeConnections,
   useUpdateNodeInternals,
 } from '@xyflow/react';
@@ -91,6 +92,43 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
    */
   const shouldShowInputHandle = isNodeActive || hasIncomingSourceOnInputHandle;
   const showCollapsedPromptPanel = isCollapsed && isNodeActive;
+  const connectionPreview = useConnection((connection) => {
+    if (!connection.inProgress || !connection.fromNode) {
+      return {
+        inProgress: false,
+        fromNodeId: null as string | null,
+        toNodeId: null as string | null,
+        toHandleId: null as string | null,
+      };
+    }
+
+    return {
+      inProgress: true,
+      fromNodeId: connection.fromNode.id,
+      toNodeId: connection.toNode?.id ?? null,
+      toHandleId: connection.toHandle?.id ?? null,
+    };
+  });
+
+  /**
+   * 连线命中输入点时显示上下流光（拖线未松手）
+   *
+   * 触发条件（与对比卡片保持一致）：
+   * 1. 正在拖线；
+   * 2. 当前目标命中本节点 input handle；
+   * 3. 非自己连接自己。
+   */
+  const showConnectionMergeGlow = useMemo(() => {
+    if (!connectionPreview.inProgress) {
+      return false;
+    }
+
+    if (connectionPreview.fromNodeId === id) {
+      return false;
+    }
+
+    return connectionPreview.toNodeId === id && connectionPreview.toHandleId === 'input';
+  }, [connectionPreview.fromNodeId, connectionPreview.inProgress, connectionPreview.toHandleId, connectionPreview.toNodeId, id]);
 
   const containerHeight = useMemo(() => {
     if (!isCollapsed) {
@@ -230,6 +268,13 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
         }}
       />
 
+      {showConnectionMergeGlow && (
+        <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-2xl">
+          <div className="image-node-merge-glint image-node-merge-glint-top" />
+          <div className="image-node-merge-glint image-node-merge-glint-bottom" />
+        </div>
+      )}
+
       {isNodeActive && hovered && (
         <button
           type="button"
@@ -357,6 +402,48 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
           )}
         </div>
       )}
+
+      <style jsx>{`
+        @keyframes image-node-glint-slide {
+          0% {
+            transform: translateX(-52%);
+            opacity: 0.12;
+          }
+          50% {
+            opacity: 0.92;
+          }
+          100% {
+            transform: translateX(52%);
+            opacity: 0.16;
+          }
+        }
+
+        .image-node-merge-glint {
+          position: absolute;
+          left: -26%;
+          width: 152%;
+          height: 2px;
+          background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.06) 18%,
+            rgba(255, 255, 255, 0.92) 50%,
+            rgba(255, 255, 255, 0.06) 82%,
+            rgba(255, 255, 255, 0) 100%
+          );
+          filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.35));
+          animation: image-node-glint-slide 1.2s ease-in-out infinite;
+        }
+
+        .image-node-merge-glint-top {
+          top: 0;
+        }
+
+        .image-node-merge-glint-bottom {
+          bottom: 0;
+          animation-delay: 0.14s;
+        }
+      `}</style>
     </div>
   );
 }
