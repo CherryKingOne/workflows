@@ -12,6 +12,7 @@ import { type Node } from '@xyflow/react';
  */
 export const FILE_UPLOAD_NODE_TYPE = 'fileUpload';
 export const IMAGE_GENERATION_NODE_TYPE = 'imageGeneration';
+export const PREVIEW_NODE_TYPE = 'preview';
 
 /**
  * 前端文件展示摘要
@@ -145,6 +146,83 @@ export type ImageGenerationWorkflowNode = Node<
 >;
 
 /**
+ * 预览节点数据契约
+ *
+ * 这一层仍属于展示层（presentation）：
+ * - 只描述“这个节点要显示什么”
+ * - 只暴露“这个节点向上抛什么交互事件”
+ * - 不在这里实现后端调用细节
+ *
+ * 为什么要留 `onRequestSyncPreview`：
+ * - 预览节点未来一定要和后端能力联动（例如读取最新任务结果、刷新素材状态）
+ * - 但卡片组件不应直接知道 Tauri/Rust 细节
+ * - 所以由卡片抛事件 -> CanvasBoard（装配层）接住 -> application 层函数编排
+ *
+ * 当前状态说明（非常重要）：
+ * - 这个契约目前还没有“真实媒体载荷字段”
+ * - 现阶段预览卡片展示的是空状态文案，不是图片/视频播放器
+ *
+ * 后续支持图片/视频时，建议新增如下字段（示例，仅说明方向）：
+ * - `previewMedia?: { kind: 'image' | 'video'; url: string; mimeType: string }`
+ * - `previewStatus?: 'idle' | 'loading' | 'success' | 'error'`
+ * - `previewErrorMessage?: string`
+ *
+ * 后续新增音频时，建议最小改动路径：
+ * 1. 把 `kind` 扩展到 `'audio'`
+ * 2. 在卡片渲染层增加 `audio` 分支
+ * 3. 如果音频需要复杂展示（波形、时长、字幕），优先拆独立子组件
+ *
+ * 删除能力扩展建议：
+ * - 保持 `onRequestRemove(nodeId)` 作为统一删除入口
+ * - 如果未来支持“软删除/回收站/撤销删除”，不要改卡片层签名，
+ *   在 application 层扩展命令对象并由装配层透传
+ *
+ * 重构建议：
+ * - 当 `PreviewNodeData` 字段明显增多时，建议按功能拆分类型：
+ *   例如 `PreviewMediaPayload`、`PreviewLifecycleState`、`PreviewActions`
+ * - 拆分后在这里组合，避免单个 interface 失控增长
+ */
+export interface PreviewNodeData extends Record<string, unknown> {
+  /**
+   * 顶部标题（目前显示“预览节点”）
+   */
+  title: string;
+  /**
+   * 主提示文案（当前空状态第一行）
+   */
+  primaryHintText: string;
+  /**
+   * 次提示文案（当前空状态第二行）
+   */
+  secondaryHintText: string;
+  /**
+   * 卡片宽度（像素）
+   */
+  cardWidth?: number;
+  /**
+   * 卡片高度（像素）
+   */
+  cardHeight?: number;
+  /**
+   * 删除节点请求（只上抛，不在卡片内部直接删全局数据）
+   */
+  onRequestRemove?: (nodeId: string) => void;
+  /**
+   * 请求同步预览数据（后端联调入口）
+   *
+   * 预期职责：
+   * - 触发 application 层去获取最新预览内容
+   * - 不在卡片内部直接发请求
+   */
+  onRequestSyncPreview?: (nodeId: string) => void;
+}
+
+/**
+ * 画布内“预览节点”的强类型定义
+ */
+export type PreviewWorkflowNode = Node<PreviewNodeData, typeof PREVIEW_NODE_TYPE>;
+
+/**
  * 画布可渲染节点联合类型
  *
  * 说明：
@@ -152,4 +230,7 @@ export type ImageGenerationWorkflowNode = Node<
  * - 用联合类型可以在一个数组里安全存放不同节点
  * - TypeScript 会帮助我们在读写数据时做类型收窄
  */
-export type CanvasWorkflowNode = FileUploadWorkflowNode | ImageGenerationWorkflowNode;
+export type CanvasWorkflowNode =
+  | FileUploadWorkflowNode
+  | ImageGenerationWorkflowNode
+  | PreviewWorkflowNode;

@@ -22,10 +22,12 @@ import {
   type CanvasWorkflowNode,
   FILE_UPLOAD_NODE_TYPE,
   IMAGE_GENERATION_NODE_TYPE,
+  PREVIEW_NODE_TYPE,
   type FileUploadAssetSummary,
   type FileUploadWorkflowNode,
   type ImageGenerationPromptDraft,
   type ImageGenerationWorkflowNode,
+  type PreviewWorkflowNode,
 } from './canvas-nodes/types';
 
 /**
@@ -40,6 +42,8 @@ const DEFAULT_FILE_UPLOAD_CARD_HEIGHT = 320;
 const DEFAULT_IMAGE_NODE_CARD_WIDTH = 400;
 const DEFAULT_IMAGE_NODE_EXPANDED_HEIGHT = 420;
 const DEFAULT_IMAGE_NODE_COLLAPSED_HEIGHT = 88;
+const DEFAULT_PREVIEW_NODE_CARD_WIDTH = 540;
+const DEFAULT_PREVIEW_NODE_CARD_HEIGHT = 340;
 /**
  * 动态卡片尺寸边界（按当前视觉稿收敛）
  *
@@ -535,6 +539,42 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   }, []);
 
   /**
+   * 预览节点“同步最新预览结果”入口（后端对接预留）
+   *
+   * 为什么入口放在 CanvasBoard：
+   * - 预览卡片本身只做展示层
+   * - 真正的业务编排应放在装配层，再转给 application 层
+   *
+   * 未来接后端时建议：
+   * 1. 在 application 层新增 `SyncPreviewNodeUseCase`
+   * 2. 由该 use case 调用 infrastructure 适配器（Tauri/Rust）
+   * 3. 返回结果后再更新节点 UI 状态（如预览图、状态文案、时间戳）
+   *
+   * 当前实现状态：
+   * - 这里只是占位入口，尚未真正拉取图片/视频数据
+   * - 保留该函数是为了明确“后端联调应该挂在哪”
+   *
+   * 后续支持图片/视频预览的推荐落地步骤（给接手同学）：
+   * 1. 在 application 层定义输入输出契约（例如 nodeId -> preview payload）
+   * 2. 在这里调用 use case，并拿到标准化结果
+   * 3. 用 `setCanvasNodes` 只更新目标预览节点的数据字段
+   * 4. 卡片组件根据新字段渲染 image/video 分支
+   * 5. 出错时写入 error 状态字段，让卡片显示错误占位
+   *
+   * 后续新增音频时的最小改动路径：
+   * - application 层结果中新增 `kind: 'audio'`
+   * - 这里保持映射逻辑不变（只做数据透传）
+   * - 让 PreviewNodeCard 新增 `audio` UI 分支即可
+   *
+   * 删除与清理注意事项：
+   * - 若后续预览媒体改为 Object URL，本函数或删除流程要补充 URL 回收
+   * - 统一在装配层/应用层清理，避免子组件各自清理导致遗漏
+   */
+  const handleRequestSyncPreview = useCallback((nodeId: string) => {
+    console.info('[UI Placeholder] 预览节点请求同步，待接后端函数。', { nodeId });
+  }, []);
+
+  /**
    * 图片节点提示词草稿更新
    *
    * 当前版本：
@@ -697,6 +737,62 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     handleRequestGenerateImage,
     handleUpdateImagePromptText,
   ]);
+
+  /**
+   * 创建“预览”节点
+   *
+   * 对应右键菜单中的“预览”按钮。
+   * 当前阶段只实现前端卡片样式和交互骨架，不接入真实后端数据流。
+   *
+   * 后续扩展建议：
+   * - 新增“预览状态”字段（如 idle/loading/success/failed）
+   * - 在 application 层增加“同步预览内容”用例
+   * - 由用例统一驱动节点 UI 状态更新，而不是在卡片里直接请求后端
+   *
+   * 补充说明（交接重点）：
+   * - 本函数只负责“创建节点初始壳”
+   * - 不负责“把后端预览内容塞进节点”
+   * - 媒体内容更新应走 `handleRequestSyncPreview` + application 层
+   *
+   * 如果未来要重构预览节点创建逻辑，建议方向：
+   * 1. 把默认数据提炼到 `buildPreviewNodeData()` 工厂函数
+   * 2. 把“定位计算”提炼到 `getPreviewNodeInitialPosition()`
+   * 3. 保持当前函数只做“组装 + setCanvasNodes”两件事
+   *
+   * 如果未来要支持“批量删除/撤销删除”：
+   * - 不要在卡片组件新增复杂删除流程
+   * - 统一在 CanvasBoard / application 层维护删除命令和历史栈
+   */
+  const createPreviewNodeFromContextMenu = useCallback(() => {
+    const nodeId = `preview-${nodeSequenceRef.current}`;
+    nodeSequenceRef.current += 1;
+
+    const nextNode: PreviewWorkflowNode = {
+      id: nodeId,
+      type: PREVIEW_NODE_TYPE,
+      selected: true,
+      position: {
+        // 预览卡片是横向大卡，创建时让点击点接近卡片几何中心，视觉更自然。
+        x: Math.max(0, contextMenu.canvasX - DEFAULT_PREVIEW_NODE_CARD_WIDTH / 2),
+        y: Math.max(0, contextMenu.canvasY - DEFAULT_PREVIEW_NODE_CARD_HEIGHT / 2),
+      },
+      data: {
+        title: '预览节点',
+        primaryHintText: '连接 AI 绘图 / AI 视频 / 可灵动作迁移 节点',
+        secondaryHintText: '或从历史记录发送到此处进行预览',
+        cardWidth: DEFAULT_PREVIEW_NODE_CARD_WIDTH,
+        cardHeight: DEFAULT_PREVIEW_NODE_CARD_HEIGHT,
+        onRequestRemove: handleRemoveNode,
+        onRequestSyncPreview: handleRequestSyncPreview,
+      },
+    };
+
+    setCanvasNodes((previousNodes) => [
+      ...previousNodes.map((node) => ({ ...node, selected: false })),
+      nextNode,
+    ]);
+    setContextMenu((previous) => ({ ...previous, visible: false }));
+  }, [contextMenu.canvasX, contextMenu.canvasY, handleRemoveNode, handleRequestSyncPreview]);
 
   /**
    * 存储管理弹窗状态
@@ -1019,6 +1115,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
 
             当前版本已完成：
             - 右键菜单点击“上传文件”后创建节点卡片
+            - 右键菜单点击“预览”后创建预览节点卡片
             - 节点可拖拽、可选中、可删除
             - 节点内“选择文件”按钮预留后端调用入口
 
@@ -1203,7 +1300,10 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
               <svg className="w-4 h-4 text-gray-400 group-hover:text-white mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
               <span className="text-[13px] text-gray-300 group-hover:text-white">图片</span>
             </button>
-            <button className="flex items-center px-3 py-1.5 hover:bg-white/5 rounded-md group transition-colors">
+            <button
+              onClick={createPreviewNodeFromContextMenu}
+              className="flex items-center px-3 py-1.5 hover:bg-white/5 rounded-md group transition-colors"
+            >
               <svg className="w-4 h-4 text-gray-400 group-hover:text-white mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
               <span className="text-[13px] text-gray-300 group-hover:text-white">预览</span>
             </button>

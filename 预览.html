@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>预览节点 - 四种状态原型 UI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 还原暗黑点阵背景 */
+        body {
+            background-color: #0b0b0c;
+            background-image: radial-gradient(circle, #222224 1px, transparent 1px);
+            background-size: 32px 32px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: #fff;
+            margin: 0;
+            padding: 40px;
+        }
+
+        /* 隐藏滚动条让视觉更干净 */
+        ::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <!-- 页面大标题 -->
+    <div class="mb-12 text-center">
+        <h1 class="text-2xl font-bold text-gray-200">预览节点卡片 - 状态分解交付图</h1>
+        <p class="text-gray-500 mt-2 text-sm">提供给前端开发的 4 种静态样式参考，无交互，仅供取样。</p>
+    </div>
+
+    <!-- 2x2 网格布局展示四种状态 -->
+    <div class="grid grid-cols-2 gap-x-12 gap-y-20 max-w-[1400px] mx-auto place-items-center">
+
+        <!-- ========================================== -->
+        <!-- 状态 1: 图1 (激活态 + 鼠标悬浮) -->
+        <!-- ========================================== -->
+        <div class="relative w-[540px] flex flex-col items-center">
+            <!-- 开发者批注 -->
+            <div class="absolute -top-16 text-[#4ea8de] font-bold text-sm bg-[#4ea8de]/10 px-3 py-1 rounded border border-[#4ea8de]/30">
+                图 1：状态 = 激活 (Active) 且 鼠标悬浮 (Hover)
+            </div>
+
+            <div class="w-full relative">
+                <!-- 标题 -->
+                <div class="absolute -top-8 left-0 text-[#888888] text-[15px] font-medium tracking-wider">预览节点</div>
+                
+                <!-- 卡片主体 (高亮边框) -->
+                <div class="relative w-full h-[340px] bg-[#161618] rounded-[14px] border-[2px] border-[#99999a] shadow-[0_0_12px_rgba(255,255,255,0.1)] flex flex-col items-center justify-center">
+                    
+                    <!-- 左侧输入点 -->
+                    <div class="absolute -left-[6px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] bg-[#606060] rounded-full border border-[#161618]"></div>
+
+                    <!-- 右侧输出点 -->
+                    <div class="absolute -right-[6px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] bg-[#606060] rounded-full border border-[#161618]"></div>
+
+                    <!-- 右上角关闭按钮 (悬浮时显示) -->
+                    <div class="absolute -top-[10px] -right-[10px] w-[20px] h-[20px] bg-[#2a2a2b] border border-[#444] rounded-full flex items-center justify-center cursor-pointer hover:bg-[#333]">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </div>
+
+                    <!-- 内部空状态内容 -->
+                    <div class="flex flex-col items-center">
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" class="mb-4">
+                            <path d="M12 5C7 5 2.73 8.11 1 12C2.73 15.89 7 19 12 19C17 19 21.27 15.89 23 12C21.27 8.11 17 5 12 5Z" stroke="#4a4a4c" stroke-width="2" stroke-linecap="round"/>
+                            <circle cx="12" cy="12" r="3.5" stroke="#4a4a4c" stroke-width="2"/>
+                            <circle cx="12" cy="12" r="1.5" fill="#4a4a4c"/>
+                        </svg>
+                        <p class="text-[#999999] text-[15px] tracking-wide">连接 AI 绘图 / AI 视频 / 可灵动作迁移 节点</p>
+                        <p class="text-[#666666] text-[13px] mt-3 tracking-wide">或从历史记录发送到此处进行预览</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 状态 2: 图2 (激活态 + 鼠标离开) -->
+        <!-- ========================================== -->
+        <div class="relative w-[540px] flex flex-col items-center">
+            <!-- 开发者批注 -->
+            <div class="absolute -top-16 text-[#4ea8de] font-bold text-sm bg-[#4ea8de]/10 px-3 py-1 rounded border border-[#4ea8de]/30">
+                图 2：状态 = 激活 (Active) 且 鼠标未悬浮
+            </div>
+
+            <div class="w-full relative">
+                <div class="absolute -top-8 left-0 text-[#888888] text-[15px] font-medium tracking-wider">预览节点</div>
+                
+                <!-- 卡片主体 (高亮边框，无按钮) -->
+                <div class="relative w-full h-[340px] bg-[#161618] rounded-[14px] border-[2px] border-[#99999a] shadow-[0_0_12px_rgba(255,255,255,0.1)] flex flex-col items-center justify-center">
+                    
+                    <!-- 左侧输入点 -->
+                    <div class="absolute -left-[6px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] bg-[#606060] rounded-full border border-[#161618]"></div>
+
+                    <!-- 右侧输出点 -->
+                    <div class="absolute -right-[6px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] bg-[#606060] rounded-full border border-[#161618]"></div>
+
+                    <div class="flex flex-col items-center">
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" class="mb-4">
+                            <path d="M12 5C7 5 2.73 8.11 1 12C2.73 15.89 7 19 12 19C17 19 21.27 15.89 23 12C21.27 8.11 17 5 12 5Z" stroke="#4a4a4c" stroke-width="2" stroke-linecap="round"/>
+                            <circle cx="12" cy="12" r="3.5" stroke="#4a4a4c" stroke-width="2"/>
+                            <circle cx="12" cy="12" r="1.5" fill="#4a4a4c"/>
+                        </svg>
+                        <p class="text-[#999999] text-[15px] tracking-wide">连接 AI 绘图 / AI 视频 / 可灵动作迁移 节点</p>
+                        <p class="text-[#666666] text-[13px] mt-3 tracking-wide">或从历史记录发送到此处进行预览</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 状态 3: 图3 (未激活 + 鼠标离开) -->
+        <!-- ========================================== -->
+        <div class="relative w-[540px] flex flex-col items-center">
+            <!-- 开发者批注 -->
+            <div class="absolute -top-16 text-[#4ea8de] font-bold text-sm bg-[#4ea8de]/10 px-3 py-1 rounded border border-[#4ea8de]/30">
+                图 3：状态 = 未激活 (Inactive) 且 鼠标未悬浮 (默认底态)
+            </div>
+
+            <div class="w-full relative">
+                <div class="absolute -top-8 left-0 text-[#888888] text-[15px] font-medium tracking-wider">预览节点</div>
+                
+                <!-- 卡片主体 (暗色边框，无按钮) -->
+                <div class="relative w-full h-[340px] bg-[#161618] rounded-[14px] border border-[#2a2a2c] flex flex-col items-center justify-center">
+                    
+                    <!-- 左侧输入点 -->
+                    <div class="absolute -left-[6px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] bg-[#606060] rounded-full border border-[#161618]"></div>
+
+                    <!-- 右侧输出点 -->
+                    <div class="absolute -right-[6px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] bg-[#606060] rounded-full border border-[#161618]"></div>
+
+                    <div class="flex flex-col items-center">
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" class="mb-4">
+                            <path d="M12 5C7 5 2.73 8.11 1 12C2.73 15.89 7 19 12 19C17 19 21.27 15.89 23 12C21.27 8.11 17 5 12 5Z" stroke="#4a4a4c" stroke-width="2" stroke-linecap="round"/>
+                            <circle cx="12" cy="12" r="3.5" stroke="#4a4a4c" stroke-width="2"/>
+                            <circle cx="12" cy="12" r="1.5" fill="#4a4a4c"/>
+                        </svg>
+                        <p class="text-[#999999] text-[15px] tracking-wide">连接 AI 绘图 / AI 视频 / 可灵动作迁移 节点</p>
+                        <p class="text-[#666666] text-[13px] mt-3 tracking-wide">或从历史记录发送到此处进行预览</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 状态 4: 图4 (未激活 + 鼠标悬浮) -->
+        <!-- ========================================== -->
+        <div class="relative w-[540px] flex flex-col items-center">
+            <!-- 开发者批注 -->
+            <div class="absolute -top-16 text-[#4ea8de] font-bold text-sm bg-[#4ea8de]/10 px-3 py-1 rounded border border-[#4ea8de]/30">
+                图 4：状态 = 未激活 (Inactive) 且 鼠标悬浮
+            </div>
+
+            <div class="w-full relative">
+                <div class="absolute -top-8 left-0 text-[#888888] text-[15px] font-medium tracking-wider">预览节点</div>
+                
+                <!-- 卡片主体 (暗色边框) -->
+                <div class="relative w-full h-[340px] bg-[#161618] rounded-[14px] border border-[#2a2a2c] flex flex-col items-center justify-center">
+                    
+                    <!-- 左侧输入点 -->
+                    <div class="absolute -left-[6px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] bg-[#606060] rounded-full border border-[#161618]"></div>
+
+                    <!-- 右侧输出点 -->
+                    <div class="absolute -right-[6px] top-1/2 -translate-y-1/2 w-[10px] h-[10px] bg-[#606060] rounded-full border border-[#161618]"></div>
+
+                    <!-- 右上角关闭按钮 (悬浮时显示) -->
+                    <div class="absolute -top-[10px] -right-[10px] w-[20px] h-[20px] bg-[#2a2a2b] border border-[#444] rounded-full flex items-center justify-center cursor-pointer hover:bg-[#333]">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </div>
+
+                    <div class="flex flex-col items-center">
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" class="mb-4">
+                            <path d="M12 5C7 5 2.73 8.11 1 12C2.73 15.89 7 19 12 19C17 19 21.27 15.89 23 12C21.27 8.11 17 5 12 5Z" stroke="#4a4a4c" stroke-width="2" stroke-linecap="round"/>
+                            <circle cx="12" cy="12" r="3.5" stroke="#4a4a4c" stroke-width="2"/>
+                            <circle cx="12" cy="12" r="1.5" fill="#4a4a4c"/>
+                        </svg>
+                        <p class="text-[#999999] text-[15px] tracking-wide">连接 AI 绘图 / AI 视频 / 可灵动作迁移 节点</p>
+                        <p class="text-[#666666] text-[13px] mt-3 tracking-wide">或从历史记录发送到此处进行预览</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>

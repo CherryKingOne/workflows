@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片对比节点 UI 复刻</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 复刻背景的暗色点阵网格 */
+        .bg-dots {
+            background-color: #09090b; /* zinc-950 */
+            background-image: radial-gradient(circle, #27272a 1px, transparent 1px);
+            background-size: 32px 32px;
+        }
+        
+        /* 复刻透明图片底部的深色棋盘格背景 */
+        .bg-checkerboard {
+            background-color: #18181b;
+            background-image: 
+                linear-gradient(45deg, #09090b 25%, transparent 25%, transparent 75%, #09090b 75%, #09090b), 
+                linear-gradient(45deg, #09090b 25%, transparent 25%, transparent 75%, #09090b 75%, #09090b);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+        }
+
+        /* 隐藏滚动条让视觉更干净 */
+        ::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="bg-dots text-white font-sans antialiased min-h-screen p-10 pb-32">
+
+    <div class="max-w-6xl mx-auto space-y-24">
+        
+        <!-- 头部说明 -->
+        <div class="text-zinc-400 border-l-4 border-blue-500 pl-4 py-1 bg-zinc-900/50 rounded-r shadow-lg">
+            <h1 class="text-xl text-white font-bold mb-1">图片对比节点原型 UI</h1>
+            <p class="text-sm">已将不同状态拆分为独立组件，便于前端组件化开发 (Vue/React)。</p>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- 状态 1 & 2: 默认空状态 & Hover/选中状态 (图1-图4) -->
+        <!-- ========================================== -->
+        <section>
+            <h2 class="text-zinc-500 mb-8 text-sm uppercase tracking-widest font-bold">1. 基础节点状态 (空)</h2>
+            <div class="flex flex-wrap gap-16 items-center">
+                
+                <!-- 1. 默认状态 (图1) -->
+                <div class="relative w-[380px] h-[240px]">
+                    <!-- 标题 -->
+                    <div class="absolute -top-8 left-0 text-zinc-400 text-[15px] font-medium tracking-wide">图片对比</div>
+                    
+                    <!-- 主体框 -->
+                    <div class="w-full h-full bg-[#18181b] border border-zinc-700/60 rounded-[14px] flex flex-col items-center justify-center relative shadow-lg">
+                        <!-- 左侧输入连接点 -->
+                        <div class="absolute top-1/2 -left-[6px] -translate-y-1/2 w-[12px] h-[12px] rounded-full bg-zinc-600 border border-[#18181b]"></div>
+                        
+                        <!-- 内部占位内容 -->
+                        <svg class="w-7 h-7 text-zinc-600 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 18V6" stroke-linecap="round"/>
+                            <path d="M15 18V6" stroke-linecap="round"/>
+                            <rect x="5" y="6" width="4" height="12" rx="1"/>
+                            <rect x="15" y="6" width="4" height="12" rx="1"/>
+                        </svg>
+                        <span class="text-zinc-500 text-sm font-medium">连接图片以对比</span>
+                    </div>
+                </div>
+
+                <!-- 2. 激活/Hover 状态 (图2/图3/图4) -->
+                <div class="relative w-[380px] h-[240px]">
+                    <div class="absolute -top-8 left-0 text-zinc-400 text-[15px] font-medium tracking-wide">图片对比</div>
+                    
+                    <!-- 边框变亮，增加微妙的阴影发光效果 -->
+                    <div class="w-full h-full bg-[#18181b] border-2 border-zinc-500/80 rounded-[14px] flex flex-col items-center justify-center relative shadow-[0_0_15px_rgba(255,255,255,0.05)]">
+                        <!-- 连接点 -->
+                        <div class="absolute top-1/2 -left-[7px] -translate-y-1/2 w-[12px] h-[12px] rounded-full bg-zinc-500 border-2 border-[#18181b]"></div>
+                        
+                        <!-- 右上角关闭按钮 (Hover出现) -->
+                        <button class="absolute -top-[10px] -right-[10px] w-6 h-6 bg-[#27272a] hover:bg-zinc-600 border border-zinc-700 rounded-full flex items-center justify-center text-zinc-400 hover:text-white transition-colors">
+                            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                        </button>
+
+                        <svg class="w-7 h-7 text-zinc-500 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 18V6" stroke-linecap="round"/><path d="M15 18V6" stroke-linecap="round"/><rect x="5" y="6" width="4" height="12" rx="1"/><rect x="15" y="6" width="4" height="12" rx="1"/>
+                        </svg>
+                        <span class="text-zinc-500 text-sm font-medium">连接图片以对比</span>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- 状态 3: 包含图片对比的节点 (图5) -->
+        <!-- ========================================== -->
+        <section>
+            <h2 class="text-zinc-500 mb-8 text-sm uppercase tracking-widest font-bold">2. 图片已接入状态 (单节点UI)</h2>
+            
+            <div class="relative w-[380px] h-[260px]">
+                <div class="absolute -top-8 left-0 text-zinc-400 text-[15px] font-medium tracking-wide">图片对比</div>
+                
+                <div class="w-full h-full bg-[#18181b] border border-zinc-700/60 rounded-[14px] relative shadow-lg overflow-hidden flex">
+                    <!-- 左侧输入连接点 (此时连接状态通常为白色实心) -->
+                    <div class="absolute top-1/2 -left-[6px] z-20 -translate-y-1/2 w-[12px] h-[12px] rounded-full bg-white border-2 border-[#18181b]"></div>
+                    
+                    <!-- 内部内容区：使用棋盘格背景 -->
+                    <div class="w-full h-full bg-checkerboard p-2 relative rounded-[12px] overflow-hidden group">
+                        
+                        <!-- 图片容器 -->
+                        <div class="relative w-full h-full bg-black rounded-lg overflow-hidden border border-zinc-800">
+                            
+                            <!-- 底层图片 (生成图 - 右侧) -->
+                            <img src="https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=800&auto=format&fit=crop" class="absolute inset-0 w-full h-full object-cover" alt="Generated">
+                            
+                            <!-- 顶层图片 (原始图 - 左侧) 使用 clip-path 裁切一半 -->
+                            <div class="absolute inset-0 w-full h-full" style="clip-path: inset(0 50% 0 0);">
+                                <img src="https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=800&auto=format&fit=crop&grayscale" class="absolute inset-0 w-full h-full object-cover" alt="Original">
+                            </div>
+
+                            <!-- 中间分割线与滑块 -->
+                            <div class="absolute top-0 bottom-0 left-1/2 w-[2px] bg-white shadow-[0_0_4px_rgba(0,0,0,0.5)] -translate-x-1/2 z-10 cursor-ew-resize">
+                                <!-- 滑块按钮 -->
+                                <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-zinc-800">
+                                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="m9 18-6-6 6-6"/><path d="m15 18 6-6-6-6"/>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            <!-- 左下角 Label 原始 -->
+                            <div class="absolute bottom-2 left-2 z-10 bg-black/80 text-zinc-300 text-xs px-2.5 py-1 rounded-md font-medium border border-zinc-700/50">
+                                原始
+                            </div>
+
+                            <!-- 右下角 Button 生成 -->
+                            <div class="absolute bottom-2 right-2 z-10 bg-[#2563eb] text-white text-xs px-3.5 py-1.5 rounded-md font-medium shadow-md cursor-pointer hover:bg-blue-500 transition-colors">
+                                生成
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- 状态 4: 节点连线图 (多张输入对比) (图6) -->
+        <!-- ========================================== -->
+        <section>
+            <h2 class="text-zinc-500 mb-8 text-sm uppercase tracking-widest font-bold">3. 节点连线拓扑图状态 (前端连线参考)</h2>
+            
+            <!-- 画布容器，设置固定高度以演示连线 -->
+            <div class="relative w-full h-[600px] border border-zinc-800/50 rounded-2xl bg-zinc-900/20 overflow-hidden" id="node-canvas">
+                
+                <!-- SVG 连线层 (绝对定位铺满画布) -->
+                <!-- 这里的贝塞尔曲线使用 d="M 起点X 起点Y C 控制点1X 控制点1Y, 控制点2X 控制点2Y, 终点X 终点Y" -->
+                <svg class="absolute inset-0 w-full h-full pointer-events-none z-0">
+                    <!-- 上方图片节点 -> 对比节点 -->
+                    <path d="M 380 180 C 550 180, 500 300, 680 300" fill="none" stroke="#52525b" stroke-width="2" stroke-linecap="round" class="opacity-80"/>
+                    <!-- 下方代码节点 -> 对比节点 -->
+                    <path d="M 480 440 C 600 440, 500 300, 680 300" fill="none" stroke="#52525b" stroke-width="2" stroke-linecap="round" class="opacity-80"/>
+                </svg>
+
+                <!-- 节点 1: 来源图片 (左上) -->
+                <div class="absolute top-[80px] left-[100px] z-10 w-[280px]">
+                    <div class="text-zinc-400 text-xs mb-2 tracking-wider">409×415 · PixPin_2026-03-27_1...</div>
+                    <div class="relative bg-black rounded-xl p-1 border border-zinc-700/60 shadow-xl">
+                        <img src="https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=600&auto=format&fit=crop" class="w-full h-[200px] object-cover rounded-lg" alt="Source">
+                        <!-- 输出端点 -->
+                        <div class="absolute top-1/2 -right-[5px] -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-zinc-500 border-2 border-zinc-900"></div>
+                    </div>
+                </div>
+
+                <!-- 节点 2: 来源代码/信息 (左下) -->
+                <div class="absolute top-[340px] left-[50px] z-10 w-[430px]">
+                    <div class="text-zinc-400 text-xs mb-2 tracking-wider">1308×552 PixPin_2026-03-24_19-42-07</div>
+                    <div class="relative bg-[#1e1e1e] rounded-xl border border-zinc-700/60 shadow-xl overflow-hidden flex h-[200px]">
+                        <!-- 模拟代码编辑器 UI -->
+                        <div class="w-1/2 p-4 text-[10px] font-mono text-zinc-300 leading-relaxed overflow-hidden">
+                            <span class="text-pink-400">let</span> hasImage = <span class="text-blue-400">false</span>;<br><br>
+                            Array.<span class="text-yellow-200">from</span>(items).forEach(<span class="text-blue-400">item</span> => {<br>
+                            &nbsp;&nbsp;<span class="text-pink-400">if</span> (item.type.startsWith(<span class="text-orange-300">'image/'</span>)) {<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;hasImage = <span class="text-blue-400">true</span>;<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;<span class="text-pink-400">const</span> file = item.getAsFile();<br>
+                            &nbsp;&nbsp;&nbsp;&nbsp;// ...
+                        </div>
+                        <div class="w-1/2 bg-[#252526] p-4 text-[11px] text-zinc-400 border-l border-zinc-700/50 flex flex-col gap-2">
+                            <div class="flex items-start gap-2"><div class="w-1.5 h-1.5 rounded-full bg-zinc-500 mt-1"></div><span>截图后直接粘贴 - 使用系统截图...</span></div>
+                            <div class="flex items-start gap-2"><div class="w-1.5 h-1.5 rounded-full bg-zinc-500 mt-1"></div><span>从文件管理器复制图片...</span></div>
+                            <div class="flex items-start gap-2"><div class="w-1.5 h-1.5 rounded-full bg-zinc-500 mt-1"></div><span>从网页复制图片...</span></div>
+                        </div>
+                        <!-- 输出端点 -->
+                        <div class="absolute top-1/2 -right-[5px] -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-zinc-500 border-2 border-[#1e1e1e]"></div>
+                    </div>
+                </div>
+
+                <!-- 节点 3: 目标图片对比节点 (右侧中心) -->
+                <div class="absolute top-[180px] left-[680px] z-10 w-[360px] h-[240px]">
+                    <div class="absolute -top-7 left-0 text-zinc-400 text-sm font-medium">图片对比</div>
+                    <div class="w-full h-full bg-[#18181b] border border-zinc-700/60 rounded-xl relative shadow-2xl flex">
+                        
+                        <!-- 输入端点 (白色表示已连接) -->
+                        <div class="absolute top-1/2 -left-[5px] z-20 -translate-y-1/2 w-[10px] h-[10px] rounded-full bg-white border border-zinc-900 shadow-[0_0_8px_rgba(255,255,255,0.8)]"></div>
+                        
+                        <div class="w-full h-full bg-checkerboard p-2 relative rounded-xl overflow-hidden">
+                            <div class="relative w-full h-full bg-black rounded-lg overflow-hidden border border-zinc-800 flex">
+                                
+                                <!-- 左侧图片区 (占总宽的约40%演示多图拼接) -->
+                                <div class="w-[45%] h-full relative">
+                                    <img src="https://images.unsplash.com/photo-1518005020951-eccb494ad742?q=80&w=400&auto=format&fit=crop&grayscale" class="w-full h-full object-cover" alt="Original">
+                                    <div class="absolute bottom-2 left-2 z-10 bg-black/80 text-zinc-300 text-xs px-2 py-1 rounded border border-zinc-700/50">原始</div>
+                                </div>
+
+                                <!-- 分割线 -->
+                                <div class="w-[2px] h-full bg-white relative z-10 flex items-center justify-center">
+                                    <div class="absolute w-6 h-6 bg-white rounded-full shadow-md flex items-center justify-center text-black">
+                                        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 18-6-6 6-6"/><path d="m15 18 6-6-6-6"/></svg>
+                                    </div>
+                                </div>
+
+                                <!-- 右侧代码对比区 -->
+                                <div class="flex-1 h-full bg-[#1e1e1e] p-3 text-[9px] text-zinc-400 overflow-hidden relative">
+                                    <div class="absolute bottom-2 right-2 z-10 bg-[#2563eb] text-white text-xs px-3 py-1 rounded shadow-md cursor-pointer hover:bg-blue-500">生成</div>
+                                    <p class="mb-2 text-zinc-300">是没有这个的 &lt;label class="upload-button"&gt; ...</p>
+                                    <p class="text-zinc-500 font-mono">
+                                        &lt;input type="file" id="imageInput"<br>
+                                        accept="image/*" multiple="" class="hidden"<br>
+                                        onchange="handleImageUpload(event)"&gt;<br>
+                                        &lt;svg viewBox="0 0 24 24" ...<br>
+                                    </p>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </div>
+
+</body>
+</html>
