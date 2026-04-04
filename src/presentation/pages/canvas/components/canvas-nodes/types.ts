@@ -11,6 +11,7 @@ import { type Node } from '@xyflow/react';
  * 统一常量是新手最容易忽略、但长期最影响稳定性的细节之一。
  */
 export const FILE_UPLOAD_NODE_TYPE = 'fileUpload';
+export const IMAGE_GENERATION_NODE_TYPE = 'imageGeneration';
 
 /**
  * 前端文件展示摘要
@@ -67,3 +68,88 @@ export interface FileUploadNodeData extends Record<string, unknown> {
  * - 在节点层、菜单层、调用层之间传值更安全
  */
 export type FileUploadWorkflowNode = Node<FileUploadNodeData, typeof FILE_UPLOAD_NODE_TYPE>;
+
+/**
+ * 图片生成比例类型
+ *
+ * 这里先收敛为固定联合类型，原因：
+ * - 当前原型里展示的是固定比例按钮（例如 1:1）
+ * - 用联合类型能让后续 UI 按钮和后端参数约束保持一致
+ *
+ * 后续如需支持“任意宽高自定义”，建议新增：
+ * - `custom` 类型
+ * - 对应的宽高数值字段
+ */
+export type ImageGenerationAspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
+
+/**
+ * 图片生成分辨率档位
+ *
+ * 这是一层“展示层可读值”，后续后端可在应用层做映射，例如：
+ * - `1K` -> 1024
+ * - `2K` -> 2048
+ */
+export type ImageGenerationResolution = '1K' | '2K';
+
+/**
+ * 图片节点提交到后端前的“草稿参数”
+ *
+ * 说明：
+ * - 该结构只描述前端已经收集到的输入
+ * - 不在这里放后端返回内容（比如任务 ID、进度、结果 URL）
+ *
+ * 后续接后端时，建议把这个结构映射到 application 层命令对象，例如：
+ * - `CreateImageGenerationTaskCommandInput`
+ */
+export interface ImageGenerationPromptDraft {
+  promptText: string;
+  modelName: string;
+  aspectRatio: ImageGenerationAspectRatio;
+  resolution: ImageGenerationResolution;
+}
+
+/**
+ * 图片生成节点数据契约
+ *
+ * 职责边界（给新手）：
+ * - 这里只描述“卡片渲染与交互需要什么数据”
+ * - 不承载复杂业务规则（配额、鉴权、计费、审核等）
+ * - 不承载基础设施细节（HTTP、Tauri、SDK）
+ *
+ * 后端对接推荐流程（函数调用优先）：
+ * 1. 节点卡片点击“生成” -> 调用 `onRequestGenerateImage`
+ * 2. `CanvasBoard` 作为装配层接住事件并调用 application 层函数
+ * 3. application 层编排领域规则与基础设施适配器
+ */
+export interface ImageGenerationNodeData extends Record<string, unknown> {
+  title: string;
+  promptText: string;
+  modelName: string;
+  aspectRatio: ImageGenerationAspectRatio;
+  resolution: ImageGenerationResolution;
+  cardWidth?: number;
+  expandedHeight?: number;
+  collapsedHeight?: number;
+  isCollapsed?: boolean;
+  onRequestRemove?: (nodeId: string) => void;
+  onRequestGenerateImage?: (nodeId: string, draft: ImageGenerationPromptDraft) => void;
+  onRequestUpdatePromptText?: (nodeId: string, nextPromptText: string) => void;
+}
+
+/**
+ * 画布内“图片生成节点”的强类型定义
+ */
+export type ImageGenerationWorkflowNode = Node<
+  ImageGenerationNodeData,
+  typeof IMAGE_GENERATION_NODE_TYPE
+>;
+
+/**
+ * 画布可渲染节点联合类型
+ *
+ * 说明：
+ * - 画布会逐步扩展更多节点
+ * - 用联合类型可以在一个数组里安全存放不同节点
+ * - TypeScript 会帮助我们在读写数据时做类型收窄
+ */
+export type CanvasWorkflowNode = FileUploadWorkflowNode | ImageGenerationWorkflowNode;

@@ -19,9 +19,13 @@ import { useStorage } from '../../../hooks/useStorage';
 import { CanvasNodeLayer } from './canvas-nodes/CanvasNodeLayer';
 import { UploadedAssetFloatingToolbar } from './toolbars/UploadedAssetFloatingToolbar';
 import {
+  type CanvasWorkflowNode,
   FILE_UPLOAD_NODE_TYPE,
+  IMAGE_GENERATION_NODE_TYPE,
   type FileUploadAssetSummary,
   type FileUploadWorkflowNode,
+  type ImageGenerationPromptDraft,
+  type ImageGenerationWorkflowNode,
 } from './canvas-nodes/types';
 
 /**
@@ -33,6 +37,9 @@ import {
 const SUPPORTED_UPLOAD_MIME_PREFIXES = ['image/', 'video/', 'audio/'] as const;
 const DEFAULT_FILE_UPLOAD_CARD_WIDTH = 320;
 const DEFAULT_FILE_UPLOAD_CARD_HEIGHT = 320;
+const DEFAULT_IMAGE_NODE_CARD_WIDTH = 400;
+const DEFAULT_IMAGE_NODE_EXPANDED_HEIGHT = 420;
+const DEFAULT_IMAGE_NODE_COLLAPSED_HEIGHT = 88;
 /**
  * 动态卡片尺寸边界（按当前视觉稿收敛）
  *
@@ -42,6 +49,18 @@ const DEFAULT_FILE_UPLOAD_CARD_HEIGHT = 320;
  */
 const MAX_FILE_UPLOAD_CARD_LONG_SIDE = 360;
 const MIN_FILE_UPLOAD_CARD_SHORT_SIDE = 150;
+
+/**
+ * 节点类型守卫：是否为“上传文件节点”
+ *
+ * 为什么需要类型守卫：
+ * - `canvasNodes` 现在是“多节点联合类型”
+ * - 不同节点的数据结构不同（比如只有上传节点才有 selectedAssets）
+ * - 用类型守卫可避免误读字段，减少新手改动时的类型错误
+ */
+function isFileUploadWorkflowNode(node: CanvasWorkflowNode): node is FileUploadWorkflowNode {
+  return node.type === FILE_UPLOAD_NODE_TYPE;
+}
 
 /**
  * 释放节点文件预览 URL
@@ -216,7 +235,7 @@ interface CanvasBoardProps {
  */
 export function CanvasBoard({ project }: CanvasBoardProps) {
   const router = useRouter();
-  const canvasNodesRef = useRef<FileUploadWorkflowNode[]>([]);
+  const canvasNodesRef = useRef<CanvasWorkflowNode[]>([]);
   const toolbarUploadInputRef = useRef<HTMLInputElement | null>(null);
   const toolbarUploadTargetNodeIdRef = useRef<string | null>(null);
   
@@ -284,7 +303,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * 2. 应用层统一编排仓库与持久化
    * 3. 展示层只消费结果，不直接承担业务规则
    */
-  const [canvasNodes, setCanvasNodes] = useState<FileUploadWorkflowNode[]>([]);
+  const [canvasNodes, setCanvasNodes] = useState<CanvasWorkflowNode[]>([]);
 
   /**
    * 画布连线状态（仅前端 UI）
@@ -306,7 +325,10 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * - 有上传文件，但当前没有点击该卡片（未激活）
    */
   const activeUploadedNode = canvasNodes.find(
-    (node) => node.selected && (node.data.selectedAssets?.length ?? 0) > 0,
+    (node): node is FileUploadWorkflowNode =>
+      isFileUploadWorkflowNode(node) &&
+      Boolean(node.selected) &&
+      (node.data.selectedAssets?.length ?? 0) > 0,
   );
 
   /**
@@ -347,7 +369,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * - 协同编辑
    * - 持久化同步
    */
-  const handleCanvasNodesChange = useCallback<OnNodesChange<FileUploadWorkflowNode>>((changes) => {
+  const handleCanvasNodesChange = useCallback<OnNodesChange<CanvasWorkflowNode>>((changes) => {
     setCanvasNodes((previousNodes) => applyNodeChanges(changes, previousNodes));
   }, []);
 
@@ -392,7 +414,9 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   const handleRemoveNode = useCallback((nodeId: string) => {
     setCanvasNodes((previousNodes) => {
       const removingNode = previousNodes.find((node) => node.id === nodeId);
-      revokePreviewUrls(removingNode?.data.selectedAssets);
+      if (removingNode && isFileUploadWorkflowNode(removingNode)) {
+        revokePreviewUrls(removingNode.data.selectedAssets);
+      }
       return previousNodes.filter((node) => node.id !== nodeId);
     });
     setCanvasEdges((previousEdges) =>
@@ -419,7 +443,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     if (hasInvalidFile) {
       setCanvasNodes((previousNodes) =>
         previousNodes.map((node) => {
-          if (node.id !== nodeId) {
+          if (node.id !== nodeId || !isFileUploadWorkflowNode(node)) {
             return node;
           }
           revokePreviewUrls(node.data.selectedAssets);
@@ -455,7 +479,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
 
     setCanvasNodes((previousNodes) =>
       previousNodes.map((node) => {
-        if (node.id !== nodeId) {
+        if (node.id !== nodeId || !isFileUploadWorkflowNode(node)) {
           return node;
         }
         revokePreviewUrls(node.data.selectedAssets);
@@ -491,6 +515,50 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       nodeId,
       '文件数量:',
       files.length,
+    );
+  }, []);
+
+  /**
+   * 图片节点“生成”动作入口（后端对接预留）
+   *
+   * 设计目标：
+   * - 节点卡片只负责收集输入并触发事件
+   * - 页面装配层统一承接事件，未来在这里对接 application 层 use case
+   *
+   * 后续后端接入建议：
+   * - 建立 `CreateImageGenerationTaskUseCase`
+   * - 由该 use case 统一处理参数校验、任务创建、状态更新
+   * - infrastructure 层再适配 Tauri/Rust 函数
+   */
+  const handleRequestGenerateImage = useCallback((nodeId: string, draft: ImageGenerationPromptDraft) => {
+    console.info('[UI Placeholder] 图片生成请求待接后端函数。', { nodeId, draft });
+  }, []);
+
+  /**
+   * 图片节点提示词草稿更新
+   *
+   * 当前版本：
+   * - 仅在前端内存中同步草稿，方便还原 UI
+   *
+   * 后续扩展方向：
+   * - 可增加自动保存节流（例如 300ms）
+   * - 可在 application 层增加“草稿持久化命令”
+   */
+  const handleUpdateImagePromptText = useCallback((nodeId: string, nextPromptText: string) => {
+    setCanvasNodes((previousNodes) =>
+      previousNodes.map((node) => {
+        if (node.id !== nodeId || node.type !== IMAGE_GENERATION_NODE_TYPE) {
+          return node;
+        }
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            promptText: nextPromptText,
+          },
+        };
+      }),
     );
   }, []);
 
@@ -537,7 +605,9 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   useEffect(() => {
     return () => {
       canvasNodesRef.current.forEach((node) => {
-        revokePreviewUrls(node.data.selectedAssets);
+        if (isFileUploadWorkflowNode(node)) {
+          revokePreviewUrls(node.data.selectedAssets);
+        }
       });
     };
   }, []);
@@ -555,6 +625,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     const nextNode: FileUploadWorkflowNode = {
       id: nodeId,
       type: FILE_UPLOAD_NODE_TYPE,
+      selected: true,
       position: {
         // 原型卡片尺寸约 320px，创建时让菜单点击点更接近卡片中心，交互更自然。
         x: Math.max(0, contextMenu.canvasX - DEFAULT_FILE_UPLOAD_CARD_WIDTH / 2),
@@ -572,9 +643,60 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       },
     };
 
-    setCanvasNodes((previousNodes) => [...previousNodes, nextNode]);
+    setCanvasNodes((previousNodes) => [
+      ...previousNodes.map((node) => ({ ...node, selected: false })),
+      nextNode,
+    ]);
     setContextMenu((previous) => ({ ...previous, visible: false }));
   }, [contextMenu.canvasX, contextMenu.canvasY, handleRemoveNode, handleRequestUpload]);
+
+  /**
+   * 创建“图片生成”节点
+   *
+   * 对应右键菜单中的“图片”按钮。
+   * 当前只做前端节点创建与交互骨架，不接真实后端任务创建。
+   */
+  const createImageGenerationNodeFromContextMenu = useCallback(() => {
+    const nodeId = `image-generation-${nodeSequenceRef.current}`;
+    nodeSequenceRef.current += 1;
+
+    const nextNode: ImageGenerationWorkflowNode = {
+      id: nodeId,
+      type: IMAGE_GENERATION_NODE_TYPE,
+      selected: true,
+      position: {
+        // 原型宽度约 600，默认展开高度约 480，让点击点落在卡片几何中心附近。
+        x: Math.max(0, contextMenu.canvasX - DEFAULT_IMAGE_NODE_CARD_WIDTH / 2),
+        y: Math.max(0, contextMenu.canvasY - DEFAULT_IMAGE_NODE_EXPANDED_HEIGHT / 2),
+      },
+      data: {
+        title: '生成图片',
+        promptText: '',
+        modelName: 'Qwen Image Edit',
+        aspectRatio: '1:1',
+        resolution: '1K',
+        cardWidth: DEFAULT_IMAGE_NODE_CARD_WIDTH,
+        expandedHeight: DEFAULT_IMAGE_NODE_EXPANDED_HEIGHT,
+        collapsedHeight: DEFAULT_IMAGE_NODE_COLLAPSED_HEIGHT,
+        isCollapsed: false,
+        onRequestRemove: handleRemoveNode,
+        onRequestGenerateImage: handleRequestGenerateImage,
+        onRequestUpdatePromptText: handleUpdateImagePromptText,
+      },
+    };
+
+    setCanvasNodes((previousNodes) => [
+      ...previousNodes.map((node) => ({ ...node, selected: false })),
+      nextNode,
+    ]);
+    setContextMenu((previous) => ({ ...previous, visible: false }));
+  }, [
+    contextMenu.canvasX,
+    contextMenu.canvasY,
+    handleRemoveNode,
+    handleRequestGenerateImage,
+    handleUpdateImagePromptText,
+  ]);
 
   /**
    * 存储管理弹窗状态
@@ -1074,7 +1196,10 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
               <svg className="w-4 h-4 text-gray-400 group-hover:text-white mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
               <span className="text-[13px] text-gray-300 group-hover:text-white">上传文件</span>
             </button>
-            <button className="flex items-center px-3 py-1.5 hover:bg-white/5 rounded-md group transition-colors">
+            <button
+              onClick={createImageGenerationNodeFromContextMenu}
+              className="flex items-center px-3 py-1.5 hover:bg-white/5 rounded-md group transition-colors"
+            >
               <svg className="w-4 h-4 text-gray-400 group-hover:text-white mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
               <span className="text-[13px] text-gray-300 group-hover:text-white">图片</span>
             </button>

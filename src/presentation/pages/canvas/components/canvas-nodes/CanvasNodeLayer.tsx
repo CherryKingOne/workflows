@@ -12,7 +12,12 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { FileUploadNodeCard } from './FileUploadNodeCard';
-import { FILE_UPLOAD_NODE_TYPE, type FileUploadWorkflowNode } from './types';
+import { ImageGenerationNodeCard } from './ImageGenerationNodeCard';
+import {
+  FILE_UPLOAD_NODE_TYPE,
+  IMAGE_GENERATION_NODE_TYPE,
+  type CanvasWorkflowNode,
+} from './types';
 
 /**
  * React Flow 节点类型映射
@@ -22,6 +27,7 @@ import { FILE_UPLOAD_NODE_TYPE, type FileUploadWorkflowNode } from './types';
  */
 const nodeTypes: NodeTypes = {
   [FILE_UPLOAD_NODE_TYPE]: FileUploadNodeCard,
+  [IMAGE_GENERATION_NODE_TYPE]: ImageGenerationNodeCard,
 };
 
 interface CanvasNodeLayerProps {
@@ -30,7 +36,7 @@ interface CanvasNodeLayerProps {
    *
    * 由上层装配组件（CanvasBoard）管理，当前组件只负责渲染。
    */
-  nodes: FileUploadWorkflowNode[];
+  nodes: CanvasWorkflowNode[];
 
   /**
    * 连线数据列表
@@ -47,7 +53,7 @@ interface CanvasNodeLayerProps {
    * - 持久化
    * - 协同编辑
    */
-  onNodesChange: OnNodesChange<FileUploadWorkflowNode>;
+  onNodesChange: OnNodesChange<CanvasWorkflowNode>;
 
   /**
    * 连线变更回调（删除/重连等）
