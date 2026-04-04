@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   Handle,
   NodeProps,
   Position,
+  useConnection,
   useNodeConnections,
   useUpdateNodeInternals,
 } from '@xyflow/react';
@@ -78,6 +79,43 @@ export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadW
   const topDisplayName = hasSelectedAssets
     ? toDisplayNameWithoutExtension(firstAsset?.name ?? data.title)
     : data.title;
+  const connectionPreview = useConnection((connection) => {
+    if (!connection.inProgress || !connection.fromNode) {
+      return {
+        inProgress: false,
+        fromNodeId: null as string | null,
+        toNodeId: null as string | null,
+        toHandleId: null as string | null,
+      };
+    }
+
+    return {
+      inProgress: true,
+      fromNodeId: connection.fromNode.id,
+      toNodeId: connection.toNode?.id ?? null,
+      toHandleId: connection.toHandle?.id ?? null,
+    };
+  });
+
+  /**
+   * 连线命中输入点时显示上下流光（仅拖线进行中）
+   *
+   * 触发条件（与你给的要求一致）：
+   * 1. 当前正在拖线（鼠标未松开）
+   * 2. 当前拖线目标命中本节点 input handle
+   * 3. 非“自己连自己”场景
+   */
+  const showConnectionMergeGlow = useMemo(() => {
+    if (!connectionPreview.inProgress) {
+      return false;
+    }
+
+    if (connectionPreview.fromNodeId === id) {
+      return false;
+    }
+
+    return connectionPreview.toNodeId === id && connectionPreview.toHandleId === 'input';
+  }, [connectionPreview.fromNodeId, connectionPreview.inProgress, connectionPreview.toHandleId, connectionPreview.toNodeId, id]);
 
   /**
    * 当激活态切换时，主动通知 React Flow 重新计算 handle 几何信息。
@@ -216,6 +254,13 @@ export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadW
         }}
       />
 
+      {showConnectionMergeGlow && (
+        <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-2xl">
+          <div className="upload-node-merge-glint upload-node-merge-glint-top" />
+          <div className="upload-node-merge-glint upload-node-merge-glint-bottom" />
+        </div>
+      )}
+
       <div
         className="absolute left-0 top-[-26px] truncate text-[12px] text-neutral-300"
         style={{ maxWidth: `${Math.max(120, cardWidth - 40)}px` }}
@@ -276,6 +321,48 @@ export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadW
           <audio src={firstAsset.previewUrl} controls className="nodrag nowheel w-full h-8" />
         </div>
       )}
+
+      <style jsx>{`
+        @keyframes upload-node-glint-slide {
+          0% {
+            transform: translateX(-52%);
+            opacity: 0.12;
+          }
+          50% {
+            opacity: 0.92;
+          }
+          100% {
+            transform: translateX(52%);
+            opacity: 0.16;
+          }
+        }
+
+        .upload-node-merge-glint {
+          position: absolute;
+          left: -26%;
+          width: 152%;
+          height: 2px;
+          background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.06) 18%,
+            rgba(255, 255, 255, 0.92) 50%,
+            rgba(255, 255, 255, 0.06) 82%,
+            rgba(255, 255, 255, 0) 100%
+          );
+          filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.35));
+          animation: upload-node-glint-slide 1.2s ease-in-out infinite;
+        }
+
+        .upload-node-merge-glint-top {
+          top: 0;
+        }
+
+        .upload-node-merge-glint-bottom {
+          bottom: 0;
+          animation-delay: 0.14s;
+        }
+      `}</style>
     </div>
   );
 }
