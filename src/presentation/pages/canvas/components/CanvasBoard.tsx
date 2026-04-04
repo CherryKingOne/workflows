@@ -52,7 +52,7 @@ const DEFAULT_IMAGE_NODE_EXPANDED_HEIGHT = 380;
 const DEFAULT_IMAGE_NODE_COLLAPSED_HEIGHT = 88;
 const DEFAULT_PREVIEW_NODE_CARD_WIDTH = 500;
 const DEFAULT_PREVIEW_NODE_CARD_HEIGHT = 340;
-const INITIAL_CANVAS_VIEWPORT: Viewport = { x: -1500, y: -1200, zoom: 1 };
+const INITIAL_CANVAS_VIEWPORT: Viewport = { x: -1500, y: -1200, zoom: 0.89 };
 /**
  * 动态卡片尺寸边界（按当前视觉稿收敛）
  *
@@ -415,6 +415,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * 这组状态由 React Flow 原生交互驱动（拖拽平移、滚轮缩放、小地图拖拽）。
    */
   const [viewport, setViewport] = useState<Viewport>(INITIAL_CANVAS_VIEWPORT);
+  const zoomPercentText = `${Math.round(viewport.zoom * 100)}%`;
 
   /**
    * 右键菜单状态
@@ -1513,7 +1514,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
             <div className="flex items-center space-x-2">
               <div className="flex items-center space-x-1">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                <span>90%</span>
+                <span>{zoomPercentText}</span>
               </div>
             </div>
             
