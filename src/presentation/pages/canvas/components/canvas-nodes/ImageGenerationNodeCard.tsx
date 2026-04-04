@@ -1,7 +1,13 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Handle, NodeProps, Position, useUpdateNodeInternals } from '@xyflow/react';
+import {
+  Handle,
+  NodeProps,
+  Position,
+  useNodeConnections,
+  useUpdateNodeInternals,
+} from '@xyflow/react';
 import {
   type ImageGenerationAspectRatio,
   type ImageGenerationPromptDraft,
@@ -67,6 +73,22 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
   const collapsedHeight = data.collapsedHeight ?? DEFAULT_COLLAPSED_HEIGHT;
 
   const isNodeActive = Boolean(selected);
+  const incomingConnectionsOnInputHandle = useNodeConnections({
+    id,
+    handleType: 'target',
+    handleId: 'input',
+  });
+  const hasIncomingSourceOnInputHandle = incomingConnectionsOnInputHandle.length > 0;
+  /**
+   * 输入点显示规则（按你当前要求）：
+   * 1. 节点激活时显示；
+   * 2. 节点未激活但输入点已有来源时，也保持显示。
+   *
+   * 注意：
+   * - 这个规则只作用在“输入点”；
+   * - 输出点仍保持“仅激活态显示”。
+   */
+  const shouldShowInputHandle = isNodeActive || hasIncomingSourceOnInputHandle;
   const showCollapsedPromptPanel = isCollapsed && isNodeActive;
 
   const containerHeight = useMemo(() => {
@@ -94,7 +116,7 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
    */
   useEffect(() => {
     updateNodeInternals(id);
-  }, [cardWidth, containerHeight, handleTopOffset, id, isNodeActive, updateNodeInternals]);
+  }, [cardWidth, containerHeight, handleTopOffset, id, isNodeActive, shouldShowInputHandle, updateNodeInternals]);
 
   /**
    * 触发“生成图片”动作
@@ -164,14 +186,16 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
         position={Position.Left}
         style={{
           top: `${handleTopOffset}px`,
-          width: isNodeActive ? 14 : 0,
-          height: isNodeActive ? 14 : 0,
-          background: isNodeActive ? '#5f6166' : 'transparent',
-          border: isNodeActive ? '2px solid #a3a3a3' : '0px solid transparent',
+          left: isNodeActive ? -7 : -6,
+          transform: 'translate(0, -50%)',
+          width: 12,
+          height: 12,
+          background: isNodeActive ? '#71717a' : '#52525b',
+          border: isNodeActive ? '2px solid #18181b' : '1px solid #18181b',
           borderRadius: '999px',
-          boxShadow: isNodeActive ? '0 0 8px rgba(0, 0, 0, 0.4)' : 'none',
-          opacity: isNodeActive ? 1 : 0,
-          pointerEvents: isNodeActive ? 'auto' : 'none',
+          boxShadow: isNodeActive ? '0 0 8px rgba(255, 255, 255, 0.18)' : 'none',
+          opacity: shouldShowInputHandle ? 1 : 0,
+          pointerEvents: shouldShowInputHandle ? 'auto' : 'none',
           zIndex: 30,
           transition: 'all 0.2s ease',
         }}
@@ -182,12 +206,14 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
         position={Position.Right}
         style={{
           top: `${handleTopOffset}px`,
-          width: isNodeActive ? 14 : 0,
-          height: isNodeActive ? 14 : 0,
-          background: isNodeActive ? '#5f6166' : 'transparent',
-          border: isNodeActive ? '2px solid #a3a3a3' : '0px solid transparent',
+          right: isNodeActive ? -7 : -6,
+          transform: 'translate(0, -50%)',
+          width: 12,
+          height: 12,
+          background: isNodeActive ? '#71717a' : '#52525b',
+          border: isNodeActive ? '2px solid #18181b' : '1px solid #18181b',
           borderRadius: '999px',
-          boxShadow: isNodeActive ? '0 0 8px rgba(0, 0, 0, 0.4)' : 'none',
+          boxShadow: isNodeActive ? '0 0 8px rgba(255, 255, 255, 0.18)' : 'none',
           opacity: isNodeActive ? 1 : 0,
           pointerEvents: isNodeActive ? 'auto' : 'none',
           zIndex: 30,
