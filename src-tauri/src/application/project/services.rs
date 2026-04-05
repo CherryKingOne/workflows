@@ -20,22 +20,27 @@ impl<R: ProjectRepository> ProjectService<R> {
 
     /// 用例：创建新项目
     pub fn create_project(&self, name: String, description: String) -> Result<Project, String> {
-        // 简单的时间戳 ID 生成策略，生产环境中应考虑使用 UUID 
+        // 简单的时间戳 ID 生成策略，生产环境中应考虑使用 UUID
         let id = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|e| e.to_string())?
             .as_millis()
             .to_string();
-            
+
         let project = Project::new(id, name, description);
         self.repository.save(&project)?;
         Ok(project)
     }
 
     /// 用例：更新现有项目
-    pub fn update_project(&self, id: String, name: String, description: String) -> Result<Project, String> {
+    pub fn update_project(
+        &self,
+        id: String,
+        name: String,
+        description: String,
+    ) -> Result<Project, String> {
         let project_id = ProjectId { value: id };
-        
+
         let mut project = match self.repository.find_by_id(&project_id)? {
             Some(p) => p,
             None => return Err(format!("Project with ID {} not found", project_id.value)),
@@ -43,7 +48,7 @@ impl<R: ProjectRepository> ProjectService<R> {
 
         project.update_meta(name, description);
         self.repository.save(&project)?;
-        
+
         Ok(project)
     }
 

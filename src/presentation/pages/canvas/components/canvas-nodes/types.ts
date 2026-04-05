@@ -27,13 +27,26 @@ export interface FileUploadAssetSummary {
   mimeType: string;
   sizeInBytes: number;
   /**
-   * 预览地址（前端临时 Object URL）
+   * 预览地址（后端返回）
    *
    * 说明：
-   * - 这个字段只用于前端预览，不是可持久化 URL
-   * - 页面卸载、节点删除、文件被替换时需要主动 revoke，避免内存泄漏
+   * - 已配置七牛时：这里是七牛 CDN / 域名 URL
+   * - 未配置七牛且为图片时：这里是 Base64 Data URL
+   * - 历史版本可能仍是 `blob:`，所以清理逻辑仍需做兼容
    */
   previewUrl?: string;
+  /**
+   * 存储策略来源（便于后续排查和扩展多存储）
+   */
+  storageProvider?: 'qiniu' | 'base64';
+  /**
+   * 七牛对象键（仅当 storageProvider = qiniu 时存在）
+   */
+  objectKey?: string;
+  /**
+   * 媒体类型（用于未来扩展更细粒度渲染策略）
+   */
+  mediaType?: 'image' | 'video' | 'audio';
 }
 
 /**

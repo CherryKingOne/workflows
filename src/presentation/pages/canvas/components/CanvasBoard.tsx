@@ -12,6 +12,7 @@ import {
   type Viewport,
 } from '@xyflow/react';
 import { useRouter } from 'next/navigation';
+import { invoke } from '@tauri-apps/api/core';
 import { Project } from '../../../../domain/project/entities/Project';
 import { ApiSettingsModal } from './modals/ApiSettingsModal';
 import { StorageModal } from './modals/StorageModal';
@@ -40,6 +41,8 @@ import {
  * 后续后端仍需保留同等校验，前后端双保险更稳妥。
  */
 const SUPPORTED_UPLOAD_MIME_PREFIXES = ['image/', 'video/', 'audio/'] as const;
+const SUPPORTED_UPLOAD_FILE_ACCEPT =
+  '.wav,.mp3,.jpeg,.jpg,.png,.bmp,.webp,.mp4,.mov,image/jpeg,image/jpg,image/png,image/bmp,image/webp,audio/wav,audio/mpeg,audio/mp3,video/mp4,video/quicktime';
 const DEFAULT_COMPARE_NODE_CARD_WIDTH = 380;
 const DEFAULT_COMPARE_NODE_CARD_HEIGHT = 240;
 const DEFAULT_COMPARE_NODE_READY_CARD_HEIGHT = 260;
@@ -62,6 +65,30 @@ const INITIAL_CANVAS_VIEWPORT: Viewport = { x: -1500, y: -1200, zoom: 0.89 };
  */
 const MAX_FILE_UPLOAD_CARD_LONG_SIDE = 360;
 const MIN_FILE_UPLOAD_CARD_SHORT_SIDE = 150;
+
+/**
+ * 后端上传函数输入 DTO（前端调用 Tauri command 时使用）。
+ */
+interface UploadCanvasFileInputDto {
+  nodeId: string;
+  fileName: string;
+  mimeType: string;
+  fileBytes: number[];
+}
+
+/**
+ * 后端上传函数输出 DTO（与 Rust `UploadedAsset` 对齐）。
+ */
+interface UploadedAssetDto {
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeInBytes: number;
+  previewUrl: string;
+  mediaType: 'image' | 'video' | 'audio';
+  storageProvider: 'qiniu' | 'base64';
+  objectKey?: string | null;
+}
 
 /**
  * 节点类型守卫：是否为“上传文件节点”
@@ -232,12 +259,13 @@ function getCompareNodeBaseMediaSize(
  * 释放节点文件预览 URL
  *
  * 注意：
- * 这些 URL 来自 `URL.createObjectURL`，浏览器不会自动释放。
- * 必须在替换文件、删除节点、页面退出时显式释放，避免内存持续增长。
+ * - 新版上传链路返回的是“七牛 URL / Base64 Data URL”，一般不需要回收；
+ * - 但历史版本和本地临时流程可能仍存在 `blob:` URL，浏览器不会自动释放；
+ * - 因此这里保留“仅回收 blob URL”的兼容逻辑，避免内存持续增长。
  */
 function revokePreviewUrls(assets?: FileUploadAssetSummary[]) {
   assets?.forEach((asset) => {
-    if (asset.previewUrl) {
+    if (asset.previewUrl?.startsWith('blob:')) {
       URL.revokeObjectURL(asset.previewUrl);
     }
   });
@@ -732,19 +760,34 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   }, []);
 
   /**
-   * 上传动作占位函数（后端对接预留）
+   * 调用后端上传函数（Tauri command）。
    *
-   * 当前前端任务只做 UI，暂不接真实上传逻辑。
-   * 这里保留函数入口，目的是明确未来后端函数调用的挂接点。
-   *
-   * 推荐后续对接路径（函数调用优先）：
-   * - presentation: 触发该回调
-   * - application: 调用 UploadFileUseCase
-   * - infrastructure: 通过 Tauri 命令适配本地文件能力
+   * 调用链路：
+   * 1. 前端读取 File -> Uint8Array；
+   * 2. invoke('upload_canvas_file_asset') 传入二进制和元信息；
+   * 3. Rust 后端按策略处理：
+   *    - 已配置七牛：上传七牛，返回公网 URL；
+   *    - 未配置七牛：仅图片转 Base64，音视频直接报错。
+   */
+  const uploadFileToBackend = useCallback(async (nodeId: string, file: File): Promise<UploadedAssetDto> => {
+    const fileBuffer = await file.arrayBuffer();
+    const fileBytes = Array.from(new Uint8Array(fileBuffer));
+    const input: UploadCanvasFileInputDto = {
+      nodeId,
+      fileName: file.name,
+      mimeType: file.type,
+      fileBytes,
+    };
+
+    return await invoke<UploadedAssetDto>('upload_canvas_file_asset', { input });
+  }, []);
+
+  /**
+   * 上传动作函数（已接入后端函数调用）。
    */
   const handleRequestUpload = useCallback(async (nodeId: string, files: File[]) => {
     const hasInvalidFile = files.some((file) =>
-      !SUPPORTED_UPLOAD_MIME_PREFIXES.some((prefix) => file.type.startsWith(prefix)),
+      file.type && !SUPPORTED_UPLOAD_MIME_PREFIXES.some((prefix) => file.type.startsWith(prefix)),
     );
 
     if (hasInvalidFile) {
@@ -767,12 +810,41 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       return;
     }
 
-    const selectedAssets: FileUploadAssetSummary[] = files.map((file, index) => ({
-      id: `${nodeId}-asset-${Date.now()}-${index}`,
-      name: file.name,
-      mimeType: file.type,
-      sizeInBytes: file.size,
-      previewUrl: URL.createObjectURL(file),
+    let uploadedAssets: UploadedAssetDto[] = [];
+    try {
+      uploadedAssets = await Promise.all(
+        files.map(async (file) => await uploadFileToBackend(nodeId, file)),
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setCanvasNodes((previousNodes) =>
+        previousNodes.map((node) => {
+          if (node.id !== nodeId || !isFileUploadWorkflowNode(node)) {
+            return node;
+          }
+          revokePreviewUrls(node.data.selectedAssets);
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              selectedAssets: [],
+              uploadErrorMessage: message || '上传失败，请稍后重试',
+            },
+          };
+        }),
+      );
+      return;
+    }
+
+    const selectedAssets: FileUploadAssetSummary[] = uploadedAssets.map((asset) => ({
+      id: asset.id,
+      name: asset.name,
+      mimeType: asset.mimeType,
+      sizeInBytes: asset.sizeInBytes,
+      previewUrl: asset.previewUrl,
+      mediaType: asset.mediaType,
+      storageProvider: asset.storageProvider,
+      objectKey: asset.objectKey ?? undefined,
     }));
 
     const firstSelectedFile = files[0];
@@ -809,21 +881,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
         };
       }),
     );
-
-    /**
-     * 后端函数调用预留位
-     *
-     * 下一步后端接入时，把这里替换为 application 层函数调用。
-     * 示例方向：
-     * - await uploadFileUseCase.execute({ nodeId, files })
-     */
-    console.info(
-      '[UI Placeholder] 已选择上传文件，后续在这里调用后端函数。节点 ID:',
-      nodeId,
-      '文件数量:',
-      files.length,
-    );
-  }, []);
+  }, [uploadFileToBackend]);
 
   /**
    * 图片节点“生成”动作入口（后端对接预留）
@@ -1582,7 +1640,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
           <input
             ref={toolbarUploadInputRef}
             type="file"
-            accept="image/*,video/*,audio/*"
+            accept={SUPPORTED_UPLOAD_FILE_ACCEPT}
             className="hidden"
             onChange={handleToolbarUploadInputChange}
           />

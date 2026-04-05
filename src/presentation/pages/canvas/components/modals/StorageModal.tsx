@@ -85,7 +85,7 @@ interface StorageConfigData {
  * 七牛云对象存储配置（展示层 DTO）
  *
  * 【字段说明】
- * - accessKey / secretKey / bucket：用户可编辑字段
+ * - accessKey / secretKey / bucket / domain：用户可编辑字段
  * - isConfigured：是否已完成一次成功保存（用于状态徽标）
  * - lastTestSucceededAt：最近一次测试成功时间，占位用于后续排障
  */
@@ -93,6 +93,7 @@ interface QiniuStorageConfigData {
   accessKey: string;
   secretKey: string;
   bucket: string;
+  domain: string;
   isConfigured: boolean;
   lastTestSucceededAt: string | null;
 }
@@ -160,6 +161,7 @@ interface StorageModalProps {
     accessKey?: string;
     secretKey?: string;
     bucket?: string;
+    domain?: string;
   }) => void;
   /** 测试七牛云连接 */
   onTestQiniuConnection: () => Promise<QiniuActionResult>;
@@ -517,15 +519,17 @@ export function StorageModal({
    * 保持输入同步路径一致，减少遗漏风险。
    */
   const handleQiniuFieldChange = (
-    field: 'accessKey' | 'secretKey' | 'bucket',
+    field: 'accessKey' | 'secretKey' | 'bucket' | 'domain',
     value: string,
   ) => {
     if (field === 'accessKey') {
       onUpdateQiniuConfigDraft({ accessKey: value });
     } else if (field === 'secretKey') {
       onUpdateQiniuConfigDraft({ secretKey: value });
-    } else {
+    } else if (field === 'bucket') {
       onUpdateQiniuConfigDraft({ bucket: value });
+    } else {
+      onUpdateQiniuConfigDraft({ domain: value });
     }
     setQiniuFeedback(null);
   };
@@ -1002,6 +1006,20 @@ export function StorageModal({
                   value={qiniuConfig.bucket}
                   onChange={(event) => handleQiniuFieldChange('bucket', event.target.value)}
                   placeholder="请输入存储空间名称"
+                  className="bg-transparent w-full text-xs text-gray-300 outline-none placeholder-gray-600"
+                />
+              </div>
+            </div>
+
+            {/* Domain */}
+            <div className="space-y-2">
+              <label className="text-xs text-gray-400">访问域名（Domain）</label>
+              <div className="input-dark rounded-lg p-3">
+                <input
+                  type="text"
+                  value={qiniuConfig.domain}
+                  onChange={(event) => handleQiniuFieldChange('domain', event.target.value)}
+                  placeholder="请输入域名，例如 https://cdn.example.com"
                   className="bg-transparent w-full text-xs text-gray-300 outline-none placeholder-gray-600"
                 />
               </div>

@@ -87,7 +87,8 @@
  * - onSaveQiniuConfig: 保存七牛云配置
  */
 
-import { useState, useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { useState, useCallback, useEffect } from 'react';
 
 // ============================================================================
 // 类型定义
@@ -122,7 +123,7 @@ interface StorageConfigDto {
  * 目前只用于前端交互，不涉及后端真实持久化。
  *
  * 【字段设计意图】
- * - accessKey / secretKey / bucket：对应用户输入的核心配置
+ * - accessKey / secretKey / bucket / domain：对应用户输入的核心配置
  * - isConfigured：用于驱动 UI 右上角状态（已配置/未配置）
  * - lastTestSucceededAt：记录最近一次测试成功时间（前端占位）
  *
@@ -137,6 +138,8 @@ interface QiniuObjectStorageConfigDto {
   secretKey: string;
   /** 七牛 Bucket 名称 */
   bucket: string;
+  /** 七牛自定义域名（如 CDN 域名） */
+  domain: string;
   /** 当前配置是否已保存 */
   isConfigured: boolean;
   /** 最近一次测试成功时间（ISO 字符串），未测试成功时为 null */
@@ -195,6 +198,7 @@ interface UseStorageReturn {
     accessKey?: string;
     secretKey?: string;
     bucket?: string;
+    domain?: string;
   }) => void;
   /** 测试七牛云连接 */
   onTestQiniuConnection: () => Promise<QiniuOperationResult>;
@@ -237,6 +241,7 @@ const MOCK_QINIU_STORAGE_CONFIG: QiniuObjectStorageConfigDto = {
   accessKey: '',
   secretKey: '',
   bucket: '',
+  domain: '',
   isConfigured: false,
   lastTestSucceededAt: null,
 };
@@ -326,6 +331,30 @@ export function useStorage(useMockData: boolean = true): UseStorageReturn {
   );
 
   /**
+   * 从后端读取七牛配置并回填到前端草稿态。
+   *
+   * 读取链路（后续功能接入可复用）：
+   * 1. 展示层触发读取（当前在 Hook 初始化时执行）
+   * 2. invoke('get_qiniu_config') 调用 Tauri command
+   * 3. Rust command -> application service -> SQLite repository
+   * 4. 返回 DTO 后覆盖本地草稿态，驱动弹窗输入框显示持久化值
+   */
+  const loadQiniuConfigFromBackend = useCallback(async () => {
+    try {
+      const persisted = await invoke<QiniuObjectStorageConfigDto>('get_qiniu_config');
+      setQiniuConfig(persisted);
+    } catch (err) {
+      const nextError = err instanceof Error ? err : new Error(String(err));
+      setError(nextError);
+      console.error('Failed to load qiniu config from backend:', nextError);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadQiniuConfigFromBackend();
+  }, [loadQiniuConfigFromBackend]);
+
+  /**
    * 判断七牛配置是否完整
    *
    * 【规则说明】
@@ -333,6 +362,7 @@ export function useStorage(useMockData: boolean = true): UseStorageReturn {
    * 1. Access Key 非空
    * 2. Secret Key 非空
    * 3. Bucket 非空
+   * 4. Domain 非空
    *
    * 后续如果要接入更严格规则（如字符集、长度、前缀），
    * 建议迁移到 domain 层的 value object 中统一校验。
@@ -341,7 +371,8 @@ export function useStorage(useMockData: boolean = true): UseStorageReturn {
     return Boolean(
       target.accessKey.trim() &&
       target.secretKey.trim() &&
-      target.bucket.trim()
+      target.bucket.trim() &&
+      target.domain.trim()
     );
   }, []);
 
@@ -695,6 +726,7 @@ export function useStorage(useMockData: boolean = true): UseStorageReturn {
     accessKey?: string;
     secretKey?: string;
     bucket?: string;
+    domain?: string;
   }) => {
     setQiniuConfig((previous) => ({
       ...previous,
@@ -727,7 +759,7 @@ export function useStorage(useMockData: boolean = true): UseStorageReturn {
         setLoading(false);
         return {
           success: false,
-          message: '请先填写 Access Key、Secret Key 和 Bucket。',
+          message: '请先填写 Access Key、Secret Key、Bucket 和域名。',
         };
       }
 
@@ -748,49 +780,52 @@ export function useStorage(useMockData: boolean = true): UseStorageReturn {
   }, [isQiniuConfigComplete, qiniuConfig, useMockData]);
 
   /**
-   * 保存七牛云配置（Mock 版本）
+   * 保存七牛云配置（持久化版本）
    *
    * 【功能说明】
    * - 校验配置完整性
-   * - 模拟保存成功后，将 isConfigured 标记为 true
-   * - 返回统一结果给组件层用于提示
-   *
-   * 【后续对接说明】
-   * 后端对接后应调用应用层命令（例如 SaveQiniuConfigCommand）：
-   * 1. 对敏感字段做安全处理（加密或系统凭据存储）
-   * 2. 落库并记录更新时间
-   * 3. 返回保存后的配置摘要（不要回传明文 Secret Key）
+   * - 调用 Tauri command 持久化到 SQLite
+   * - 用后端返回值回填当前 UI 状态
    */
   const onSaveQiniuConfig = useCallback(async (): Promise<QiniuOperationResult> => {
-    if (useMockData) {
-      setLoading(true);
-      setError(null);
-      await new Promise((resolve) => setTimeout(resolve, 700));
+    setLoading(true);
+    setError(null);
 
+    try {
       const complete = isQiniuConfigComplete(qiniuConfig);
       if (!complete) {
-        setLoading(false);
         return {
           success: false,
           message: '配置不完整，无法保存。',
         };
       }
 
-      setQiniuConfig((previous) => ({
-        ...previous,
-        isConfigured: true,
-      }));
-      setLoading(false);
+      const saved = await invoke<QiniuObjectStorageConfigDto>('save_qiniu_config', {
+        input: {
+          accessKey: qiniuConfig.accessKey,
+          secretKey: qiniuConfig.secretKey,
+          bucket: qiniuConfig.bucket,
+          domain: qiniuConfig.domain,
+          lastTestSucceededAt: qiniuConfig.lastTestSucceededAt,
+        },
+      });
+
+      setQiniuConfig(saved);
       return {
         success: true,
-        message: '七牛云配置已保存（Mock）。',
+        message: '七牛云配置已保存。',
       };
+    } catch (err) {
+      const nextError = err instanceof Error ? err : new Error(String(err));
+      setError(nextError);
+      return {
+        success: false,
+        message: `保存失败：${nextError.message}`,
+      };
+    } finally {
+      setLoading(false);
     }
-
-    // 【后续对接说明 - 真实实现】
-    // 此处应调用应用层的 SaveQiniuConfigCommand。
-    throw new Error('Not implemented yet - awaiting backend integration');
-  }, [isQiniuConfigComplete, qiniuConfig, useMockData]);
+  }, [isQiniuConfigComplete, qiniuConfig]);
 
   // ============================================================================
   // 返回值

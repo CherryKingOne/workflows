@@ -297,7 +297,7 @@ export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadW
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,video/*,audio/*"
+        accept=".wav,.mp3,.jpeg,.jpg,.png,.bmp,.webp,.mp4,.mov,image/jpeg,image/jpg,image/png,image/bmp,image/webp,audio/wav,audio/mpeg,audio/mp3,video/mp4,video/quicktime"
         className="hidden"
         onChange={handleFileInputChange}
       />

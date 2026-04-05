@@ -1,6 +1,6 @@
+use chrono::{TimeZone, Utc};
+use rusqlite::{params, Connection, OptionalExtension};
 use std::sync::{Arc, Mutex};
-use rusqlite::{Connection, params, OptionalExtension};
-use chrono::{Utc, TimeZone};
 
 use crate::domain::project::entities::{Project, ProjectId, ProjectMeta};
 use crate::domain::project::repositories::ProjectRepository;
@@ -16,7 +16,7 @@ impl SqliteProjectRepository {
     /// 初始化仓储并自动建表
     pub fn new(db_path: &str) -> Result<Self, rusqlite::Error> {
         let conn = Connection::open(db_path)?;
-        
+
         // 创建项目表
         // 注意：SQLite 中没有内置的 DateTime 类型，我们将其存储为 INTEGER (时间戳 Unix 毫秒)
         conn.execute(
@@ -40,7 +40,7 @@ impl SqliteProjectRepository {
         let id: String = row.get(0)?;
         let name: String = row.get(1)?;
         let description: String = row.get(2)?;
-        
+
         let created_at_ms: i64 = row.get(3)?;
         let updated_at_ms: i64 = row.get(4)?;
 
@@ -67,7 +67,7 @@ impl ProjectRepository for SqliteProjectRepository {
         let mut stmt = conn
             .prepare("SELECT id, name, description, created_at, updated_at FROM projects ORDER BY updated_at DESC")
             .map_err(|e| e.to_string())?;
-            
+
         let project_iter = stmt
             .query_map([], Self::row_to_project)
             .map_err(|e| e.to_string())?;
@@ -83,7 +83,9 @@ impl ProjectRepository for SqliteProjectRepository {
     fn find_by_id(&self, id: &ProjectId) -> Result<Option<Project>, String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
         let mut stmt = conn
-            .prepare("SELECT id, name, description, created_at, updated_at FROM projects WHERE id = ?1")
+            .prepare(
+                "SELECT id, name, description, created_at, updated_at FROM projects WHERE id = ?1",
+            )
             .map_err(|e| e.to_string())?;
 
         let project = stmt
@@ -96,7 +98,7 @@ impl ProjectRepository for SqliteProjectRepository {
 
     fn save(&self, project: &Project) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
-        
+
         // 将时间转换为 Unix 毫秒存储
         let created_at_ms = project.meta.created_at.timestamp_millis();
         let updated_at_ms = project.meta.updated_at.timestamp_millis();
@@ -116,17 +118,16 @@ impl ProjectRepository for SqliteProjectRepository {
                 created_at_ms,
                 updated_at_ms
             ],
-        ).map_err(|e| e.to_string())?;
+        )
+        .map_err(|e| e.to_string())?;
 
         Ok(())
     }
 
     fn delete(&self, id: &ProjectId) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| e.to_string())?;
-        conn.execute(
-            "DELETE FROM projects WHERE id = ?1",
-            params![id.value],
-        ).map_err(|e| e.to_string())?;
+        conn.execute("DELETE FROM projects WHERE id = ?1", params![id.value])
+            .map_err(|e| e.to_string())?;
 
         Ok(())
     }

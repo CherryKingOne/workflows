@@ -25,3 +25,6 @@ tauri = { version = "2.10.3", features = [] }
 tauri-plugin-log = "2"
 rusqlite = { version = "0.39.0", features = ["bundled"] }
 chrono = { version = "0.4.44", features = ["serde"] }
+base64 = "0.22.1"
+urlencoding = "2.1.3"
+qiniu-sdk = { version = "0.2", features = ["upload", "ureq"] }
