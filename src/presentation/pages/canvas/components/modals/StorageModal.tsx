@@ -13,6 +13,7 @@
  *   1. 下载目录设置：控制文件下载的默认目录
  *   2. 资源缓存目录：控制 AI 生成/远程下载素材的缓存位置
  *   3. 工作流自动保存：控制画布内容的自动保存策略
+ *   4. 七牛云对象存储：控制云端存储接入配置（前端草稿态）
  *
  * 【设计意图】
  * - 此组件是展示层，仅负责 UI 展示和用户交互
@@ -28,7 +29,7 @@
  *
  * 【组件结构】
  * 1. Header: 标题和关闭按钮
- * 2. Content: 三个配置区块（下载目录、缓存目录、自动保存）
+ * 2. Content: 四个配置区块（下载目录、缓存目录、自动保存、七牛云）
  * 3. 每个区块包含：
  *    - 图标和标题
  *    - 当前配置显示
@@ -41,6 +42,7 @@
  * - 自动保存版本管理
  * - 缓存过期策略配置
  * - 存储空间预警提示
+ * - 多云对象存储（S3/OSS/COS）切换
  *
  * 【文件拆分说明】
  * 当前文件包含完整组件，但后续如果组件变大（>400 行），应拆分为：
@@ -48,6 +50,7 @@
  * - DownloadDirectorySection.tsx: 下载目录配置区块
  * - CacheDirectorySection.tsx: 缓存目录配置区块
  * - AutoSaveSection.tsx: 自动保存配置区块
+ * - QiniuObjectStorageSection.tsx: 七牛云配置区块
  * - hooks/useStorageForm.ts: 表单状态管理 Hook
  */
 
@@ -79,6 +82,34 @@ interface StorageConfigData {
 }
 
 /**
+ * 七牛云对象存储配置（展示层 DTO）
+ *
+ * 【字段说明】
+ * - accessKey / secretKey / bucket：用户可编辑字段
+ * - isConfigured：是否已完成一次成功保存（用于状态徽标）
+ * - lastTestSucceededAt：最近一次测试成功时间，占位用于后续排障
+ */
+interface QiniuStorageConfigData {
+  accessKey: string;
+  secretKey: string;
+  bucket: string;
+  isConfigured: boolean;
+  lastTestSucceededAt: string | null;
+}
+
+/**
+ * 七牛云操作结果
+ *
+ * 【用途说明】
+ * - 统一“测试连接/保存配置”返回结构
+ * - 避免组件层耦合异常对象结构
+ */
+interface QiniuActionResult {
+  success: boolean;
+  message: string;
+}
+
+/**
  * 组件 Props 接口
  *
  * 【字段说明】
@@ -91,6 +122,10 @@ interface StorageConfigData {
  * - onUpdateAutoSave: 更新自动保存配置的回调函数
  * - onSaveWorkflowNow: 立即保存工作流的回调函数
  * - onImportAutoSave: 导入自动保存文件的回调函数
+ * - qiniuConfig: 七牛云配置草稿
+ * - onUpdateQiniuConfigDraft: 更新七牛云配置草稿
+ * - onTestQiniuConnection: 测试七牛云连接
+ * - onSaveQiniuConfig: 保存七牛云配置
  *
  * 【后续对接说明】
  * 这些回调函数应由父组件（CanvasBoard）通过 Hook 提供。
@@ -118,6 +153,18 @@ interface StorageModalProps {
   onSaveWorkflowNow: () => Promise<void>;
   /** 导入自动保存文件的回调函数 */
   onImportAutoSave: () => Promise<void>;
+  /** 七牛云配置草稿 */
+  qiniuConfig: QiniuStorageConfigData;
+  /** 更新七牛云配置草稿 */
+  onUpdateQiniuConfigDraft: (updates: {
+    accessKey?: string;
+    secretKey?: string;
+    bucket?: string;
+  }) => void;
+  /** 测试七牛云连接 */
+  onTestQiniuConnection: () => Promise<QiniuActionResult>;
+  /** 保存七牛云配置 */
+  onSaveQiniuConfig: () => Promise<QiniuActionResult>;
 }
 
 // ============================================================================
@@ -133,6 +180,7 @@ interface StorageModalProps {
  * 3. 支持选择缓存目录
  * 4. 支持配置自动保存策略
  * 5. 支持立即保存和导入自动保存
+ * 6. 支持维护七牛云对象存储配置（前端 Mock 流程）
  *
  * 【后续对接说明】
  * 当前组件仅实现前端展示和交互逻辑，后端对接需要：
@@ -157,6 +205,11 @@ interface StorageModalProps {
  * 5. 导入自动保存：
  *    - 当前：onImportAutoSave 通过 props 传入
  *    - 后续：通过 Hook 调用应用层的 ImportAutoSaveCommand
+ *
+ * 6. 七牛云配置：
+ *    - 当前：qiniuConfig + onUpdateQiniuConfigDraft + onTestQiniuConnection + onSaveQiniuConfig 通过 props 传入
+ *    - 后续：通过 Hook 调用应用层命令（TestQiniuConnectionCommand / SaveQiniuConfigCommand）
+ *    - 提示：敏感字段持久化时应加密存储，前端不应打印密钥日志
  *
  * 【后端接口需求】
  * 后端需要提供以下 Tauri 命令（命令名仅为示例，可协商）：
@@ -213,6 +266,10 @@ export function StorageModal({
   onUpdateAutoSave,
   onSaveWorkflowNow,
   onImportAutoSave,
+  qiniuConfig,
+  onUpdateQiniuConfigDraft,
+  onTestQiniuConnection,
+  onSaveQiniuConfig,
 }: StorageModalProps) {
   // ============================================================================
   // 本地状态
@@ -242,6 +299,40 @@ export function StorageModal({
   const [selectingDownloadDir, setSelectingDownloadDir] = useState(false);
   const [selectingCacheDir, setSelectingCacheDir] = useState(false);
 
+  /**
+   * 七牛敏感字段显示控制
+   *
+   * 【状态说明】
+   * - 默认隐藏（password）
+   * - 用户可按字段单独切换显示，便于核对输入
+   * - 不会写入持久层，只服务当前交互体验
+   */
+  const [showAccessKey, setShowAccessKey] = useState(false);
+  const [showSecretKey, setShowSecretKey] = useState(false);
+
+  /**
+   * 七牛操作按钮加载状态
+   *
+   * 【设计意图】
+   * 将“测试连接”和“保存配置”拆成独立 loading，
+   * 避免一个请求锁死另一个按钮，提升可预期性。
+   */
+  const [testingQiniu, setTestingQiniu] = useState(false);
+  const [savingQiniu, setSavingQiniu] = useState(false);
+
+  /**
+   * 七牛操作反馈
+   *
+   * 【状态说明】
+   * - success=true：显示绿色成功提示
+   * - success=false：显示橙/红色失败提示
+   * - null：不显示提示
+   *
+   * 【维护建议】
+   * 若后续引入全局通知系统（Toast），此状态可逐步下沉到 Hook 或通知中心。
+   */
+  const [qiniuFeedback, setQiniuFeedback] = useState<QiniuActionResult | null>(null);
+
   // ============================================================================
   // 副作用
   // ============================================================================
@@ -258,6 +349,19 @@ export function StorageModal({
       setLocalInterval(config.autoSaveIntervalMinutes);
     }
   }, [isOpen, config]);
+
+  /**
+   * 弹窗重新打开时重置七牛反馈态
+   *
+   * 【设计意图】
+   * - 避免上一次测试/保存结果“残留”到新一轮编辑
+   * - 降低新手排障时的误判（误以为当前输入已经测试通过）
+   */
+  useEffect(() => {
+    if (isOpen) {
+      setQiniuFeedback(null);
+    }
+  }, [isOpen]);
 
   /**
    * 监听 Esc 键和点击外部关闭
@@ -398,6 +502,74 @@ export function StorageModal({
    */
   const handleImportAutoSave = async () => {
     await onImportAutoSave();
+  };
+
+  /**
+   * 处理七牛字段输入
+   *
+   * 【职责边界】
+   * - 这里只负责收集输入并同步到展示层 Hook
+   * - 不做保存、不做连接校验
+   * - 保存和测试必须通过专门按钮触发，避免“输入即副作用”
+   *
+   * 【可维护性建议】
+   * 后续如需新增字段（如 Region、Domain），优先沿用此入口，
+   * 保持输入同步路径一致，减少遗漏风险。
+   */
+  const handleQiniuFieldChange = (
+    field: 'accessKey' | 'secretKey' | 'bucket',
+    value: string,
+  ) => {
+    if (field === 'accessKey') {
+      onUpdateQiniuConfigDraft({ accessKey: value });
+    } else if (field === 'secretKey') {
+      onUpdateQiniuConfigDraft({ secretKey: value });
+    } else {
+      onUpdateQiniuConfigDraft({ bucket: value });
+    }
+    setQiniuFeedback(null);
+  };
+
+  /**
+   * 处理“测试连接”
+   *
+   * 【流程说明】
+   * 1. 设置测试中状态
+   * 2. 调用 Hook 提供的测试命令
+   * 3. 将统一结果回填到提示区
+   *
+   * 【后续对接说明】
+   * 真正接入后端时，失败消息应尽量标准化（鉴权失败 / Bucket 不存在 / 网络异常）。
+   */
+  const handleTestQiniuConnection = async () => {
+    setTestingQiniu(true);
+    try {
+      const result = await onTestQiniuConnection();
+      setQiniuFeedback(result);
+    } finally {
+      setTestingQiniu(false);
+    }
+  };
+
+  /**
+   * 处理“保存配置”
+   *
+   * 【流程说明】
+   * 1. 设置保存中状态
+   * 2. 调用 Hook 提供的保存命令
+   * 3. 展示结果消息，并通过 isConfigured 更新状态徽标
+   *
+   * 【安全说明】
+   * 前端只传递用户输入，真实密钥持久化策略必须在后端实现。
+   */
+  const handleSaveQiniuConfig = async () => {
+    setSavingQiniu(true);
+    try {
+      const result = await onSaveQiniuConfig();
+      setQiniuFeedback(result);
+    } finally {
+      setSavingQiniu(false);
+    }
   };
 
   // ============================================================================
@@ -707,6 +879,168 @@ export function StorageModal({
             <p className="text-[11px] text-gray-500 leading-relaxed">
               仅保存工作流结构及画布节点引用的图像/视频素材信息（JSON），
               素材从资源缓存目录读取。文件名格式：项目名_时间.json。
+            </p>
+          </section>
+
+          {/*
+            =========================================================
+            4. 七牛云对象存储区块
+            =========================================================
+
+            【功能说明】
+            让用户在前端配置七牛云对象存储参数，并执行：
+            - 测试连接（验证当前输入可用性）
+            - 保存配置（进入已配置状态）
+
+            【职责边界】
+            - 当前区块属于展示层，不直接请求 HTTP，不直接调用 Tauri invoke
+            - 所有动作由 `useStorage` Hook 暴露命令函数
+            - 当前是 Mock 流程，后续可平滑切到应用层真实命令
+
+            【给后续维护者的安全改造指南】
+            1. 新增字段（例如 Region）：
+               - 先扩展 Hook 的 DTO 与命令参数，再扩展本区块 UI；
+               - 不要只改 UI，避免提交“看得到但存不住”的半成品。
+            2. 删除字段：
+               - 先确认后端是否仍依赖该字段；
+               - 如涉及历史数据，先做兼容读取，再分阶段移除。
+            3. 重构拆分：
+               - 当本组件继续变大时，优先拆出 `QiniuObjectStorageSection` 子组件；
+               - 子组件只收敛 UI 和交互，业务调用仍经 Hook。
+          */}
+          <section className="border border-white/5 bg-white/[0.02] rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-purple-400">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                </svg>
+                <h3 className="text-sm font-medium text-gray-200">七牛云对象存储</h3>
+              </div>
+              <span className={`text-[11px] italic ${qiniuConfig.isConfigured ? 'text-emerald-400' : 'text-gray-500'}`}>
+                {qiniuConfig.isConfigured ? '已配置' : '未配置'}
+              </span>
+            </div>
+
+            {/* Access Key */}
+            <div className="space-y-2">
+              <label className="text-xs text-gray-400">Access Key</label>
+              <div className="input-dark rounded-lg p-3 flex items-center gap-2">
+                <input
+                  type={showAccessKey ? 'text' : 'password'}
+                  value={qiniuConfig.accessKey}
+                  onChange={(event) => handleQiniuFieldChange('accessKey', event.target.value)}
+                  placeholder="请输入 Access Key"
+                  className="bg-transparent flex-1 text-xs text-gray-300 outline-none placeholder-gray-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowAccessKey((previous) => !previous)}
+                  className="text-gray-500 hover:text-gray-300 transition-colors"
+                  aria-label={showAccessKey ? '隐藏 Access Key' : '显示 Access Key'}
+                >
+                  {showAccessKey ? (
+                    // 当前为明文显示，图标用“闭眼”提示点击后会隐藏
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path d="M3 3l18 18" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M10.58 10.58a2 2 0 002.83 2.83" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M9.88 5.09A10.94 10.94 0 0112 5c4.48 0 8.27 2.94 9.54 7a11.05 11.05 0 01-4.17 5.11" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M6.61 6.61A11.06 11.06 0 002.46 12a11.05 11.05 0 005.27 6.07A10.94 10.94 0 0012 19c1.31 0 2.57-.23 3.74-.65" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  ) : (
+                    // 当前为密文隐藏，图标用“睁眼”提示点击后可查看
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Secret Key */}
+            <div className="space-y-2">
+              <label className="text-xs text-gray-400">Secret Key</label>
+              <div className="input-dark rounded-lg p-3 flex items-center gap-2">
+                <input
+                  type={showSecretKey ? 'text' : 'password'}
+                  value={qiniuConfig.secretKey}
+                  onChange={(event) => handleQiniuFieldChange('secretKey', event.target.value)}
+                  placeholder="请输入 Secret Key"
+                  className="bg-transparent flex-1 text-xs text-gray-300 outline-none placeholder-gray-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSecretKey((previous) => !previous)}
+                  className="text-gray-500 hover:text-gray-300 transition-colors"
+                  aria-label={showSecretKey ? '隐藏 Secret Key' : '显示 Secret Key'}
+                >
+                  {showSecretKey ? (
+                    // 当前为明文显示，图标用“闭眼”提示点击后会隐藏
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path d="M3 3l18 18" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M10.58 10.58a2 2 0 002.83 2.83" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M9.88 5.09A10.94 10.94 0 0112 5c4.48 0 8.27 2.94 9.54 7a11.05 11.05 0 01-4.17 5.11" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M6.61 6.61A11.06 11.06 0 002.46 12a11.05 11.05 0 005.27 6.07A10.94 10.94 0 0012 19c1.31 0 2.57-.23 3.74-.65" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  ) : (
+                    // 当前为密文隐藏，图标用“睁眼”提示点击后可查看
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Bucket */}
+            <div className="space-y-2">
+              <label className="text-xs text-gray-400">存储空间（Bucket）</label>
+              <div className="input-dark rounded-lg p-3">
+                <input
+                  type="text"
+                  value={qiniuConfig.bucket}
+                  onChange={(event) => handleQiniuFieldChange('bucket', event.target.value)}
+                  placeholder="请输入存储空间名称"
+                  className="bg-transparent w-full text-xs text-gray-300 outline-none placeholder-gray-600"
+                />
+              </div>
+            </div>
+
+            {/* 操作按钮 */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleTestQiniuConnection}
+                disabled={testingQiniu || savingQiniu || loading}
+                className="flex-1 bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed text-gray-400 text-sm py-2 rounded-lg flex items-center justify-center gap-2 transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {testingQiniu ? '测试中...' : '测试连接'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveQiniuConfig}
+                disabled={savingQiniu || testingQiniu || loading}
+                className="flex-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm py-2 rounded-lg flex items-center justify-center gap-2 transition-all"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M5 13l4 4L19 7" />
+                </svg>
+                {savingQiniu ? '保存中...' : '保存配置'}
+              </button>
+            </div>
+
+            {qiniuFeedback ? (
+              <p className={`text-[11px] leading-relaxed ${qiniuFeedback.success ? 'text-emerald-400' : 'text-orange-400'}`}>
+                {qiniuFeedback.message}
+              </p>
+            ) : null}
+
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              配置七牛云对象存储后，可将资源上传至云端存储，支持 CDN 加速访问。请妥善保管 Access Key 和 Secret Key。
             </p>
           </section>
 

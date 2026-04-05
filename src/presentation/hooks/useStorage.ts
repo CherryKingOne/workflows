@@ -81,6 +81,10 @@
  * - onUpdateAutoSave: 更新自动保存配置的函数
  * - onSaveWorkflowNow: 立即保存工作流的函数
  * - onImportAutoSave: 导入自动保存文件的函数
+ * - qiniuConfig: 七牛云配置草稿
+ * - onUpdateQiniuConfigDraft: 更新七牛云配置草稿
+ * - onTestQiniuConnection: 测试七牛云连接
+ * - onSaveQiniuConfig: 保存七牛云配置
  */
 
 import { useState, useCallback } from 'react';
@@ -108,6 +112,50 @@ interface StorageConfigDto {
   autoSaveEnabled: boolean;
   /** 自动保存间隔（分钟） */
   autoSaveIntervalMinutes: number;
+}
+
+/**
+ * 七牛云对象存储配置 DTO（前端展示层）
+ *
+ * 【职责说明】
+ * 该类型用于前端页面的“配置草稿 + 展示状态”。
+ * 目前只用于前端交互，不涉及后端真实持久化。
+ *
+ * 【字段设计意图】
+ * - accessKey / secretKey / bucket：对应用户输入的核心配置
+ * - isConfigured：用于驱动 UI 右上角状态（已配置/未配置）
+ * - lastTestSucceededAt：记录最近一次测试成功时间（前端占位）
+ *
+ * 【后续扩展建议】
+ * 后续若新增“Region、Domain、上传策略”等字段，应在此类型扩展，
+ * 并同步更新 domain 层实体（如果确定属于领域概念）。
+ */
+interface QiniuObjectStorageConfigDto {
+  /** 七牛 Access Key */
+  accessKey: string;
+  /** 七牛 Secret Key */
+  secretKey: string;
+  /** 七牛 Bucket 名称 */
+  bucket: string;
+  /** 当前配置是否已保存 */
+  isConfigured: boolean;
+  /** 最近一次测试成功时间（ISO 字符串），未测试成功时为 null */
+  lastTestSucceededAt: string | null;
+}
+
+/**
+ * 七牛操作结果（测试连接 / 保存配置）
+ *
+ * 【用途说明】
+ * - 给展示层一个统一的返回结构，避免组件层做异常字符串解析
+ * - success 决定提示颜色和后续 UI 状态
+ * - message 提供可直接展示给用户的反馈文案
+ */
+interface QiniuOperationResult {
+  /** 操作是否成功 */
+  success: boolean;
+  /** 可展示给用户的结果消息 */
+  message: string;
 }
 
 /**
@@ -140,6 +188,18 @@ interface UseStorageReturn {
   onSaveWorkflowNow: () => Promise<void>;
   /** 导入自动保存文件的函数 */
   onImportAutoSave: () => Promise<void>;
+  /** 七牛云配置草稿 */
+  qiniuConfig: QiniuObjectStorageConfigDto;
+  /** 更新七牛云配置草稿 */
+  onUpdateQiniuConfigDraft: (updates: {
+    accessKey?: string;
+    secretKey?: string;
+    bucket?: string;
+  }) => void;
+  /** 测试七牛云连接 */
+  onTestQiniuConnection: () => Promise<QiniuOperationResult>;
+  /** 保存七牛云配置 */
+  onSaveQiniuConfig: () => Promise<QiniuOperationResult>;
 }
 
 // ============================================================================
@@ -164,6 +224,23 @@ const MOCK_STORAGE_CONFIG: StorageConfigDto = {
   autoSaveIntervalMinutes: 5,
 };
 
+/**
+ * 模拟七牛云配置数据
+ *
+ * 【功能说明】
+ * 用于前端无后端时联调和交互演示。
+ *
+ * 【安全提示】
+ * 这里是本地开发态假数据，不应写入任何真实密钥。
+ */
+const MOCK_QINIU_STORAGE_CONFIG: QiniuObjectStorageConfigDto = {
+  accessKey: '',
+  secretKey: '',
+  bucket: '',
+  isConfigured: false,
+  lastTestSucceededAt: null,
+};
+
 // ============================================================================
 // 主 Hook
 // ============================================================================
@@ -186,6 +263,10 @@ const MOCK_STORAGE_CONFIG: StorageConfigDto = {
  *   onUpdateAutoSave,
  *   onSaveWorkflowNow,
  *   onImportAutoSave,
+ *   qiniuConfig,
+ *   onUpdateQiniuConfigDraft,
+ *   onTestQiniuConnection,
+ *   onSaveQiniuConfig,
  * } = useStorage(true); // true = 使用 Mock 数据
  * ```
  *
@@ -231,6 +312,38 @@ export function useStorage(useMockData: boolean = true): UseStorageReturn {
    * - 成功时重置为 null
    */
   const [error, setError] = useState<Error | null>(null);
+
+  /**
+   * 七牛云配置草稿状态
+   *
+   * 【状态说明】
+   * - 此状态是“前端草稿态”，用于输入框双向绑定
+   * - 与本地存储配置分开管理，避免互相影响
+   * - 后端接入后，该状态仍可保留，作为“编辑态”容器
+   */
+  const [qiniuConfig, setQiniuConfig] = useState<QiniuObjectStorageConfigDto>(
+    MOCK_QINIU_STORAGE_CONFIG
+  );
+
+  /**
+   * 判断七牛配置是否完整
+   *
+   * 【规则说明】
+   * 目前仅做最小完整性校验：
+   * 1. Access Key 非空
+   * 2. Secret Key 非空
+   * 3. Bucket 非空
+   *
+   * 后续如果要接入更严格规则（如字符集、长度、前缀），
+   * 建议迁移到 domain 层的 value object 中统一校验。
+   */
+  const isQiniuConfigComplete = useCallback((target: QiniuObjectStorageConfigDto): boolean => {
+    return Boolean(
+      target.accessKey.trim() &&
+      target.secretKey.trim() &&
+      target.bucket.trim()
+    );
+  }, []);
 
   // ============================================================================
   // Mock 模式操作函数
@@ -567,6 +680,118 @@ export function useStorage(useMockData: boolean = true): UseStorageReturn {
     throw new Error('Not implemented yet - awaiting backend integration');
   }, [useMockData]);
 
+  /**
+   * 更新七牛云配置草稿（展示层）
+   *
+   * 【设计意图】
+   * - 输入框改动只更新草稿，不自动保存
+   * - 一旦字段变化，默认标记为“未配置”，引导用户显式保存
+   *
+   * 【后续扩展建议】
+   * 如果后续要做“脏数据检测”，可新增 `lastSavedSnapshot` 做对比，
+   * 避免“值没变也被标记未配置”的误判。
+   */
+  const onUpdateQiniuConfigDraft = useCallback((updates: {
+    accessKey?: string;
+    secretKey?: string;
+    bucket?: string;
+  }) => {
+    setQiniuConfig((previous) => ({
+      ...previous,
+      ...updates,
+      isConfigured: false,
+    }));
+  }, []);
+
+  /**
+   * 测试七牛云连接（Mock 版本）
+   *
+   * 【功能说明】
+   * - 前端阶段仅做字段完整性校验 + 异步反馈模拟
+   * - 返回统一结果给组件层展示
+   *
+   * 【后续对接说明】
+   * 后端对接后应调用应用层命令（例如 TestQiniuConnectionCommand）：
+   * 1. 使用 Access Key / Secret Key 构建鉴权
+   * 2. 对 Bucket 执行最小权限探测（如列举/上传 token 验证）
+   * 3. 返回标准化结果（success/message）
+   */
+  const onTestQiniuConnection = useCallback(async (): Promise<QiniuOperationResult> => {
+    if (useMockData) {
+      setLoading(true);
+      setError(null);
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      const complete = isQiniuConfigComplete(qiniuConfig);
+      if (!complete) {
+        setLoading(false);
+        return {
+          success: false,
+          message: '请先填写 Access Key、Secret Key 和 Bucket。',
+        };
+      }
+
+      setQiniuConfig((previous) => ({
+        ...previous,
+        lastTestSucceededAt: new Date().toISOString(),
+      }));
+      setLoading(false);
+      return {
+        success: true,
+        message: '连接测试通过（Mock）。',
+      };
+    }
+
+    // 【后续对接说明 - 真实实现】
+    // 此处应调用应用层的 TestQiniuConnectionCommand。
+    throw new Error('Not implemented yet - awaiting backend integration');
+  }, [isQiniuConfigComplete, qiniuConfig, useMockData]);
+
+  /**
+   * 保存七牛云配置（Mock 版本）
+   *
+   * 【功能说明】
+   * - 校验配置完整性
+   * - 模拟保存成功后，将 isConfigured 标记为 true
+   * - 返回统一结果给组件层用于提示
+   *
+   * 【后续对接说明】
+   * 后端对接后应调用应用层命令（例如 SaveQiniuConfigCommand）：
+   * 1. 对敏感字段做安全处理（加密或系统凭据存储）
+   * 2. 落库并记录更新时间
+   * 3. 返回保存后的配置摘要（不要回传明文 Secret Key）
+   */
+  const onSaveQiniuConfig = useCallback(async (): Promise<QiniuOperationResult> => {
+    if (useMockData) {
+      setLoading(true);
+      setError(null);
+      await new Promise((resolve) => setTimeout(resolve, 700));
+
+      const complete = isQiniuConfigComplete(qiniuConfig);
+      if (!complete) {
+        setLoading(false);
+        return {
+          success: false,
+          message: '配置不完整，无法保存。',
+        };
+      }
+
+      setQiniuConfig((previous) => ({
+        ...previous,
+        isConfigured: true,
+      }));
+      setLoading(false);
+      return {
+        success: true,
+        message: '七牛云配置已保存（Mock）。',
+      };
+    }
+
+    // 【后续对接说明 - 真实实现】
+    // 此处应调用应用层的 SaveQiniuConfigCommand。
+    throw new Error('Not implemented yet - awaiting backend integration');
+  }, [isQiniuConfigComplete, qiniuConfig, useMockData]);
+
   // ============================================================================
   // 返回值
   // ============================================================================
@@ -580,5 +805,9 @@ export function useStorage(useMockData: boolean = true): UseStorageReturn {
     onUpdateAutoSave,
     onSaveWorkflowNow,
     onImportAutoSave,
+    qiniuConfig,
+    onUpdateQiniuConfigDraft,
+    onTestQiniuConnection,
+    onSaveQiniuConfig,
   };
 }

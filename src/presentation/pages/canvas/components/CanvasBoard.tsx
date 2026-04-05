@@ -1267,6 +1267,10 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * - onUpdateAutoSave: 更新自动保存配置的函数
    * - onSaveWorkflowNow: 立即保存工作流的函数
    * - onImportAutoSave: 导入自动保存文件的函数
+   * - qiniuConfig: 七牛云配置草稿
+   * - onUpdateQiniuConfigDraft: 更新七牛云配置草稿的函数
+   * - onTestQiniuConnection: 测试七牛云连接的函数
+   * - onSaveQiniuConfig: 保存七牛云配置的函数
    *
    * 【后续对接说明】
    * 后端对接时，Hook 内部会调用：
@@ -1285,6 +1289,10 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     onUpdateAutoSave,
     onSaveWorkflowNow,
     onImportAutoSave,
+    qiniuConfig,
+    onUpdateQiniuConfigDraft,
+    onTestQiniuConnection,
+    onSaveQiniuConfig,
   } = useStorage(true); // true = 使用 Mock 数据，后端对接时改为 false
 
   /**
@@ -1699,6 +1707,10 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
         onUpdateAutoSave={onUpdateAutoSave}
         onSaveWorkflowNow={onSaveWorkflowNow}
         onImportAutoSave={onImportAutoSave}
+        qiniuConfig={qiniuConfig}
+        onUpdateQiniuConfigDraft={onUpdateQiniuConfigDraft}
+        onTestQiniuConnection={onTestQiniuConnection}
+        onSaveQiniuConfig={onSaveQiniuConfig}
       />
 
       {/*
