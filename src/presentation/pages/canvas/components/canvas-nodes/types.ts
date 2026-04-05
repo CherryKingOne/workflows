@@ -290,6 +290,33 @@ export interface PreviewNodeData extends Record<string, unknown> {
    */
   cardHeight?: number;
   /**
+   * 预览媒体载荷（由装配层根据连线来源派生）
+   *
+   * 当前用途：
+   * - `image`: 渲染 `<img>`
+   * - `video`: 渲染 `<video controls>`
+   * - `audio`: 渲染 `<audio controls>`（作为扩展兜底，避免连了音频无反馈）
+   */
+  previewMedia?: {
+    kind: 'image' | 'video' | 'audio';
+    url: string;
+    mimeType: string;
+    name?: string;
+    storageProvider?: 'qiniu' | 'base64';
+    objectKey?: string;
+  };
+  /**
+   * 预览状态
+   *
+   * - `empty`: 未连接或无可渲染素材
+   * - `ready`: 已有可渲染媒体
+   */
+  previewStatus?: 'empty' | 'ready';
+  /**
+   * 预览错误文案（例如连接了无效来源）
+   */
+  previewErrorMessage?: string;
+  /**
    * 删除节点请求（只上抛，不在卡片内部直接删全局数据）
    */
   onRequestRemove?: (nodeId: string) => void;

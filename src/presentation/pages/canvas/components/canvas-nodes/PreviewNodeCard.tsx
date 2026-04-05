@@ -37,13 +37,13 @@ const MAX_CARD_HEIGHT = 440;
  * 4. application 层再调 infrastructure 适配器（Tauri/Rust）
  *
  * 重要说明（当前实现状态）：
- * - 当前卡片还没有真正渲染“图片/视频预览内容”
- * - 现在展示的是“空状态占位文案 + 图标”
- * - 这样做是为了先把节点骨架、交互边界、联调入口固定下来
+ * - 当前卡片已支持渲染由装配层注入的 `previewMedia`（图片/视频/音频）；
+ * - 当没有可渲染媒体时，回退到“空状态占位文案 + 图标”；
+ * - 卡片仍不直接请求后端，数据入口保持在 CanvasBoard。
  *
- * 为什么这里要明确写清楚“未实现预览渲染”：
- * - 避免新同学误以为“预览能力已经完整上线”
- * - 避免把后续媒体渲染逻辑直接堆到 CanvasBoard，破坏分层
+ * 为什么这里要明确写清楚“数据从装配层注入”：
+ * - 避免新同学把后端请求直接写进卡片组件
+ * - 避免后续媒体渲染逻辑反向堆回 CanvasBoard，破坏分层
  *
  * 后续要支持“图片/视频预览”时，建议按下面顺序新增（只做结构说明）：
  * 1. 在 `types.ts` 的 `PreviewNodeData` 新增“可渲染媒体数据”字段
@@ -171,6 +171,13 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
     data.onRequestRemove?.(id);
   };
 
+  const previewMedia = data.previewMedia;
+  const previewStatus = data.previewStatus ?? (previewMedia?.url ? 'ready' : 'empty');
+  const shouldRenderPreviewMedia = previewStatus === 'ready' && Boolean(previewMedia?.url);
+  const isImagePreview = shouldRenderPreviewMedia && previewMedia?.kind === 'image';
+  const isVideoPreview = shouldRenderPreviewMedia && previewMedia?.kind === 'video';
+  const isAudioPreview = shouldRenderPreviewMedia && previewMedia?.kind === 'audio';
+
   return (
     <div
       className="relative"
@@ -264,36 +271,56 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
           boxShadow: isNodeActive ? '0 0 12px rgba(255, 255, 255, 0.1)' : 'none',
         }}
       >
-        {/*
-          预览内容区（当前是“空状态占位版本”）
-          
-          当前阶段为什么只保留空状态：
-          - 本次任务聚焦“节点卡片设计与交接注释”
-          - 真正媒体预览涉及后端结果契约、状态管理、错误兜底，需分阶段接入
+        {shouldRenderPreviewMedia && previewMedia ? (
+          <>
+            {isImagePreview && (
+              <img
+                src={previewMedia.url}
+                alt={previewMedia.name ?? '预览图片'}
+                className="h-full w-full rounded-[12px] object-contain"
+              />
+            )}
 
-          后续落地图片/视频/音频渲染时的建议顺序：
-          1. 先判断 `data` 是否存在可用媒体
-          2. 有媒体 -> 渲染媒体组件（image/video/audio）
-          3. 无媒体 -> 回退到当前空状态
-          4. 媒体加载失败 -> 显示错误占位（建议独立子组件）
+            {isVideoPreview && (
+              <video
+                src={previewMedia.url}
+                controls
+                className="h-full w-full rounded-[12px] bg-black object-contain"
+              />
+            )}
 
-          重构提醒：
-          - 该区域会随着媒体类型变多而复杂化
-          - 一旦出现 2 种以上媒体分支，优先拆子组件，避免 `if/else` 链爆炸
-        */}
-        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" className="mb-4">
-          <path
-            d="M12 5C7 5 2.73 8.11 1 12C2.73 15.89 7 19 12 19C17 19 21.27 15.89 23 12C21.27 8.11 17 5 12 5Z"
-            stroke="#4a4a4c"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-          <circle cx="12" cy="12" r="3.5" stroke="#4a4a4c" strokeWidth="2" />
-          <circle cx="12" cy="12" r="1.5" fill="#4a4a4c" />
-        </svg>
+            {isAudioPreview && (
+              <div className="w-full max-w-[360px] rounded-xl border border-white/10 bg-black/35 p-3">
+                <p className="mb-2 truncate text-[12px] text-[#9a9a9c]">
+                  {previewMedia.name ?? '音频预览'}
+                </p>
+                <audio src={previewMedia.url} controls className="w-full" />
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" className="mb-4">
+              <path
+                d="M12 5C7 5 2.73 8.11 1 12C2.73 15.89 7 19 12 19C17 19 21.27 15.89 23 12C21.27 8.11 17 5 12 5Z"
+                stroke="#4a4a4c"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+              <circle cx="12" cy="12" r="3.5" stroke="#4a4a4c" strokeWidth="2" />
+              <circle cx="12" cy="12" r="1.5" fill="#4a4a4c" />
+            </svg>
 
-        <p className="text-[15px] tracking-wide text-[#999999]">{data.primaryHintText}</p>
-        <p className="mt-3 text-[13px] tracking-wide text-[#666666]">{data.secondaryHintText}</p>
+            {data.previewErrorMessage ? (
+              <p className="text-[13px] tracking-wide text-rose-400">{data.previewErrorMessage}</p>
+            ) : (
+              <>
+                <p className="text-[15px] tracking-wide text-[#999999]">{data.primaryHintText}</p>
+                <p className="mt-3 text-[13px] tracking-wide text-[#666666]">{data.secondaryHintText}</p>
+              </>
+            )}
+          </>
+        )}
       </div>
 
       <style jsx>{`

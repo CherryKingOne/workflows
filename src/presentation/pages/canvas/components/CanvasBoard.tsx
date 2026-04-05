@@ -110,6 +110,13 @@ function isCompareWorkflowNode(node: CanvasWorkflowNode): node is CompareWorkflo
 }
 
 /**
+ * 节点类型守卫：是否为“预览节点”
+ */
+function isPreviewWorkflowNode(node: CanvasWorkflowNode): node is PreviewWorkflowNode {
+  return node.type === PREVIEW_NODE_TYPE;
+}
+
+/**
  * 对比节点可消费的素材摘要
  *
  * 说明：
@@ -648,6 +655,94 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   );
 
   /**
+   * 根据“连线关系 + 上传节点素材”同步预览节点数据。
+   *
+   * 规则：
+   * 1. 只消费连到 preview 节点的入边；
+   * 2. 来源仅支持上传节点（fileUpload）；
+   * 3. 每个来源节点仅取 `selectedAssets[0]`；
+   * 4. 当存在可渲染素材时，写入 `previewMedia` 并标记 ready；
+   * 5. 当连线存在但没有可预览素材时，给出错误文案。
+   */
+  const syncPreviewNodesByConnections = useCallback(
+    (nodes: CanvasWorkflowNode[], edges: Edge[]): CanvasWorkflowNode[] => {
+      const nodeById = new Map(nodes.map((node) => [node.id, node]));
+      let hasAnyPreviewNodeChanged = false;
+
+      const nextNodes = nodes.map((node) => {
+        if (!isPreviewWorkflowNode(node)) {
+          return node;
+        }
+
+        const incomingEdges = edges.filter((edge) => edge.target === node.id);
+        const firstConnectedUploadNode = incomingEdges
+          .map((edge) => nodeById.get(edge.source))
+          .find(
+            (sourceNode): sourceNode is FileUploadWorkflowNode =>
+              Boolean(sourceNode && isFileUploadWorkflowNode(sourceNode)),
+          );
+
+        const firstAsset = firstConnectedUploadNode?.data.selectedAssets?.[0];
+        const hasRenderableMedia = Boolean(
+          firstAsset?.previewUrl &&
+            (firstAsset.mimeType.startsWith('image/') ||
+              firstAsset.mimeType.startsWith('video/') ||
+              firstAsset.mimeType.startsWith('audio/')),
+        );
+
+        const nextPreviewStatus: 'empty' | 'ready' = hasRenderableMedia ? 'ready' : 'empty';
+        const nextPreviewMedia = hasRenderableMedia && firstAsset
+          ? {
+              kind: firstAsset.mimeType.startsWith('image/')
+                ? 'image'
+                : firstAsset.mimeType.startsWith('video/')
+                  ? 'video'
+                  : 'audio',
+              url: firstAsset.previewUrl ?? '',
+              mimeType: firstAsset.mimeType,
+              name: firstAsset.name,
+              storageProvider: firstAsset.storageProvider,
+              objectKey: firstAsset.objectKey,
+            }
+          : undefined;
+
+        const nextPreviewErrorMessage =
+          !hasRenderableMedia && incomingEdges.length > 0
+            ? '当前连接素材不可预览，请检查上传内容'
+            : undefined;
+
+        const isSameAsCurrent =
+          (node.data.previewStatus ?? 'empty') === nextPreviewStatus &&
+          node.data.previewErrorMessage === nextPreviewErrorMessage &&
+          (node.data.previewMedia?.kind ?? undefined) === (nextPreviewMedia?.kind ?? undefined) &&
+          (node.data.previewMedia?.url ?? undefined) === (nextPreviewMedia?.url ?? undefined) &&
+          (node.data.previewMedia?.mimeType ?? undefined) === (nextPreviewMedia?.mimeType ?? undefined) &&
+          (node.data.previewMedia?.name ?? undefined) === (nextPreviewMedia?.name ?? undefined) &&
+          (node.data.previewMedia?.storageProvider ?? undefined) === (nextPreviewMedia?.storageProvider ?? undefined) &&
+          (node.data.previewMedia?.objectKey ?? undefined) === (nextPreviewMedia?.objectKey ?? undefined);
+
+        if (isSameAsCurrent) {
+          return node;
+        }
+
+        hasAnyPreviewNodeChanged = true;
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            previewStatus: nextPreviewStatus,
+            previewMedia: nextPreviewMedia,
+            previewErrorMessage: nextPreviewErrorMessage,
+          },
+        };
+      });
+
+      return hasAnyPreviewNodeChanged ? nextNodes : nodes;
+    },
+    [],
+  );
+
+  /**
    * 当前“可显示上传后工具栏”的激活节点
    *
    * 显示规则（与用户需求完全一致）：
@@ -1030,8 +1125,11 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * - 如果改为后端下发最终对比结果，这里可直接简化为 `canvasNodes`
    */
   const renderedCanvasNodes = useMemo(
-    () => syncCompareNodesByConnections(canvasNodes, canvasEdges),
-    [canvasEdges, canvasNodes, syncCompareNodesByConnections],
+    () => {
+      const previewSyncedNodes = syncPreviewNodesByConnections(canvasNodes, canvasEdges);
+      return syncCompareNodesByConnections(previewSyncedNodes, canvasEdges);
+    },
+    [canvasEdges, canvasNodes, syncCompareNodesByConnections, syncPreviewNodesByConnections],
   );
 
   /**
@@ -1144,7 +1242,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * 创建“预览”节点
    *
    * 对应右键菜单中的“预览”按钮。
-   * 当前阶段只实现前端卡片样式和交互骨架，不接入真实后端数据流。
+   * 当前阶段已支持“从上传节点连线透传预览媒体”，后端任务结果联动仍为后续阶段。
    *
    * 后续扩展建议：
    * - 新增“预览状态”字段（如 idle/loading/success/failed）
@@ -1184,6 +1282,9 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
         secondaryHintText: '或从历史记录发送到此处进行预览',
         cardWidth: DEFAULT_PREVIEW_NODE_CARD_WIDTH,
         cardHeight: DEFAULT_PREVIEW_NODE_CARD_HEIGHT,
+        previewStatus: 'empty',
+        previewMedia: undefined,
+        previewErrorMessage: undefined,
         onRequestRemove: handleRemoveNode,
         onRequestSyncPreview: handleRequestSyncPreview,
       },
