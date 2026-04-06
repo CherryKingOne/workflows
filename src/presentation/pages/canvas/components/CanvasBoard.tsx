@@ -1081,6 +1081,34 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   }, []);
 
   /**
+   * 图片节点模型名称更新
+   *
+   * 当用户在下拉列表中选择新模型时触发。
+   * 当前版本仅更新前端节点状态，后续可扩展为持久化。
+   *
+   * 后续扩展方向：
+   * - 可在 application 层增加"模型配置持久化命令"
+   * - 可与后端注册表联动，动态获取可用模型列表
+   */
+  const handleUpdateImageModelName = useCallback((nodeId: string, nextModelName: string) => {
+    setCanvasNodes((previousNodes) =>
+      previousNodes.map((node) => {
+        if (node.id !== nodeId || node.type !== IMAGE_GENERATION_NODE_TYPE) {
+          return node;
+        }
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            modelName: nextModelName,
+          },
+        };
+      }),
+    );
+  }, []);
+
+  /**
    * 工具栏触发“替换上传”入口
    *
    * 触发逻辑：
@@ -1212,7 +1240,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       data: {
         title: '生成图片',
         promptText: '',
-        modelName: 'Qwen Image Edit',
+        modelName: 'qwen-image-edit',
         aspectRatio: '1:1',
         resolution: '1K',
         cardWidth: DEFAULT_IMAGE_NODE_CARD_WIDTH,
@@ -1222,6 +1250,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
         onRequestRemove: handleRemoveNode,
         onRequestGenerateImage: handleRequestGenerateImage,
         onRequestUpdatePromptText: handleUpdateImagePromptText,
+        onRequestUpdateModelName: handleUpdateImageModelName,
       },
     };
 
@@ -1236,6 +1265,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     handleRemoveNode,
     handleRequestGenerateImage,
     handleUpdateImagePromptText,
+    handleUpdateImageModelName,
   ]);
 
   /**

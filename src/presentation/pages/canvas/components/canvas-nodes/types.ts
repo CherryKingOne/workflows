@@ -107,6 +107,85 @@ export type ImageGenerationAspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9'
 export type ImageGenerationResolution = '1K' | '2K';
 
 /**
+ * 图片生成模型标识
+ *
+ * 说明：
+ * - 这里定义的是前端可选择的图片生成模型 ID
+ * - 与后端注册表中的 model_name 对应
+ * - 后续新增模型只需在此处添加新值，并在 MODEL_OPTIONS 中补充展示信息
+ *
+ * 扩展建议（后续接后端）：
+ * - 模型列表应从后端 list_models('Image') 动态获取
+ * - 当前阶段先使用静态列表作为前端 UI 骨架
+ */
+export type ImageGenerationModelId =
+  | 'qwen-image-edit'
+  | 'flux-1-dev'
+  | 'stable-diffusion-xl'
+  | 'dall-e-3';
+
+/**
+ * 图片生成模型展示信息
+ *
+ * 用于在 UI 下拉列表中展示模型名称和简短描述。
+ * 后续可扩展更多信息（如模型图标、能力标签等）。
+ */
+export interface ImageModelOption {
+  value: ImageGenerationModelId;
+  label: string;
+  description?: string;
+}
+
+/**
+ * 图片生成模型选项列表
+ *
+ * 当前为静态列表，后续可改为从后端动态获取。
+ * 根据文档《模型调用开发.txt》中注册表示意：
+ * - Image:
+ *   - qwen-image-edit
+ *   - flux-1-dev
+ *
+ * 新增模型步骤：
+ * 1. 在 ImageGenerationModelId 中添加新模型 ID
+ * 2. 在此数组中添加对应展示信息
+ * 3. 后端在注册表中注册该模型
+ */
+export const IMAGE_MODEL_OPTIONS: ImageModelOption[] = [
+  {
+    value: 'qwen-image-edit',
+    label: 'Qwen Image Edit',
+    description: '通义万相图像编辑模型',
+  },
+  {
+    value: 'flux-1-dev',
+    label: 'FLUX.1 Dev',
+    description: '高质量图像生成模型',
+  },
+  {
+    value: 'stable-diffusion-xl',
+    label: 'SDXL',
+    description: 'Stable Diffusion XL',
+  },
+  {
+    value: 'dall-e-3',
+    label: 'DALL·E 3',
+    description: 'OpenAI 图像生成模型',
+  },
+];
+
+/**
+ * 根据模型 ID 获取模型展示信息
+ *
+ * @param modelId - 模型标识
+ * @returns 模型展示信息，未找到时返回默认模型
+ */
+export function getImageModelOption(modelId: string): ImageModelOption {
+  return (
+    IMAGE_MODEL_OPTIONS.find((opt) => opt.value === modelId) ?? IMAGE_MODEL_OPTIONS[0]
+  );
+}
+
+/**
  * 图片节点提交到后端前的“草稿参数”
  *
  * 说明：
@@ -149,6 +228,13 @@ export interface ImageGenerationNodeData extends Record<string, unknown> {
   onRequestRemove?: (nodeId: string) => void;
   onRequestGenerateImage?: (nodeId: string, draft: ImageGenerationPromptDraft) => void;
   onRequestUpdatePromptText?: (nodeId: string, nextPromptText: string) => void;
+  /**
+   * 请求更新模型名称
+   *
+   * 当用户在下拉列表中选择新模型时触发。
+   * 由 CanvasBoard（装配层）接住并决定是否持久化。
+   */
+  onRequestUpdateModelName?: (nodeId: string, nextModelName: string) => void;
 }
 
 /**

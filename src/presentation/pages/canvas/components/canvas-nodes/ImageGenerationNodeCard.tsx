@@ -14,6 +14,8 @@ import {
   type ImageGenerationPromptDraft,
   type ImageGenerationResolution,
   type ImageGenerationWorkflowNode,
+  IMAGE_MODEL_OPTIONS,
+  getImageModelOption,
 } from './types';
 
 const DEFAULT_CARD_WIDTH = 400;
@@ -57,7 +59,8 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
   const [isCollapsed, setIsCollapsed] = useState(Boolean(data.isCollapsed));
   const [hovered, setHovered] = useState(false);
   const [promptText, setPromptText] = useState(data.promptText ?? '');
-  const [modelName] = useState(data.modelName ?? 'Qwen Image Edit');
+  const [modelName, setModelName] = useState(data.modelName ?? 'qwen-image-edit');
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
   const [aspectRatio] = useState<ImageGenerationAspectRatio>(data.aspectRatio ?? '1:1');
   const [resolution] = useState<ImageGenerationResolution>(data.resolution ?? '1K');
 
@@ -208,6 +211,27 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
     data.onRequestRemove?.(id);
   };
 
+  /**
+   * 切换模型选择下拉列表的显示状态
+   */
+  const handleToggleModelDropdown = () => {
+    setIsModelDropdownOpen((previous) => !previous);
+  };
+
+  /**
+   * 选择模型
+   *
+   * 更新本地状态，并向上抛出事件。
+   * 这样做的好处：
+   * - 本地 UI 立即响应
+   * - 上层可选择是否持久化到全局状态
+   */
+  const handleSelectModel = (modelId: string) => {
+    setModelName(modelId);
+    setIsModelDropdownOpen(false);
+    data.onRequestUpdateModelName?.(id, modelId);
+  };
+
   return (
     <div
       className="relative"
@@ -300,8 +324,76 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
           <div className="pt-6 pl-4 text-xl font-light tracking-wide text-neutral-400">输入提示词...</div>
 
           <div className="flex items-center gap-3">
-            <div className="rounded-lg border border-white/10 bg-[#121214] px-4 py-2 text-sm text-neutral-200">
-              {modelName}
+            {/* 模型选择下拉列表 */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={handleToggleModelDropdown}
+                className="nodrag flex max-w-[140px] items-center gap-2 rounded-lg border border-white/10 bg-[#121214] px-4 py-2 text-sm text-neutral-200 transition-colors hover:bg-[#1a1a1c] hover:text-white"
+                aria-haspopup="listbox"
+                aria-expanded={isModelDropdownOpen}
+              >
+                <span className="truncate">{getImageModelOption(modelName).label}</span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={`transition-transform duration-200 ${isModelDropdownOpen ? 'rotate-180' : ''}`}
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+
+              {/* 下拉菜单 */}
+              {isModelDropdownOpen && (
+                <div
+                  className="nodrag absolute left-0 top-full z-50 mt-2 min-w-[180px] rounded-xl border border-white/10 bg-[#0f0f10] py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.6)] backdrop-blur-md"
+                  role="listbox"
+                >
+                  {IMAGE_MODEL_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                        modelName === option.value
+                          ? 'bg-white/10 text-white'
+                          : 'text-neutral-400 hover:bg-white/5 hover:text-white'
+                      }`}
+                      role="option"
+                      aria-selected={modelName === option.value}
+                      onClick={() => handleSelectModel(option.value)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{option.label}</span>
+                        {modelName === option.value && (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M20 6 9 17l-5-5" />
+                          </svg>
+                        )}
+                      </div>
+                      {option.description && (
+                        <div className="mt-0.5 text-xs text-neutral-500">{option.description}</div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <button type="button" className="nodrag rounded-lg border border-white/10 bg-[#18181b] px-4 py-2 text-sm text-neutral-300">
               {aspectRatio}
@@ -344,8 +436,76 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
             }}
           >
             <div className="flex items-center gap-3">
-              <div className="rounded-lg border border-white/10 bg-[#121214] px-4 py-2 text-sm text-neutral-200">
-                {modelName}
+              {/* 模型选择下拉列表（收起态） */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={handleToggleModelDropdown}
+                  className="nodrag flex max-w-[140px] items-center gap-2 rounded-lg border border-white/10 bg-[#121214] px-4 py-2 text-sm text-neutral-200 transition-colors hover:bg-[#1a1a1c] hover:text-white"
+                  aria-haspopup="listbox"
+                  aria-expanded={isModelDropdownOpen}
+                >
+                  <span className="truncate">{getImageModelOption(modelName).label}</span>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={`transition-transform duration-200 ${isModelDropdownOpen ? 'rotate-180' : ''}`}
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+
+                {/* 下拉菜单 */}
+                {isModelDropdownOpen && (
+                  <div
+                    className="nodrag absolute left-0 top-full z-50 mt-2 min-w-[180px] rounded-xl border border-white/10 bg-[#0f0f10] py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.6)] backdrop-blur-md"
+                    role="listbox"
+                  >
+                    {IMAGE_MODEL_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                          modelName === option.value
+                            ? 'bg-white/10 text-white'
+                            : 'text-neutral-400 hover:bg-white/5 hover:text-white'
+                        }`}
+                        role="option"
+                        aria-selected={modelName === option.value}
+                        onClick={() => handleSelectModel(option.value)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{option.label}</span>
+                          {modelName === option.value && (
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              width="14"
+                              height="14"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <path d="M20 6 9 17l-5-5" />
+                            </svg>
+                          )}
+                        </div>
+                        {option.description && (
+                          <div className="mt-0.5 text-xs text-neutral-500">{option.description}</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <button type="button" className="nodrag rounded-lg border border-white/10 bg-[#18181b] px-4 py-2 text-sm text-neutral-300">
                 {aspectRatio}
