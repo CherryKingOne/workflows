@@ -10,7 +10,7 @@
  * 
  * 【组件的作用】
  * - 展示和管理用户的 API 配置（模型接口配置）
- * - 支持按类型（Chat/Image/Video）切换查看配置
+ * - 当前仅展示 Image 类型配置
  * - 支持查看、编辑、测试连接操作
  * - 作为"装配层"，协调 UI 状态与业务逻辑
  * 
@@ -28,7 +28,7 @@
  * 
  * 【组件结构】
  * 1. Header: 标题和关闭按钮
- * 2. Tabs: 按类型切换（Chat/Image/Video）
+ * 2. Type Bar: 展示当前固定类型（Image）
  * 3. Content: 配置卡片列表
  * 4. Footer: 关闭按钮
  * 
@@ -211,11 +211,9 @@ export function ApiSettingsModal({
    * 当前激活的 Tab 类型
    * 
    * 【状态说明】
-   * - 用于控制显示哪种类型的配置
-   * - 默认为 'Chat'
-   * - 切换 Tab 时会过滤显示对应配置
+   * - 当前页面只展示 Image 类型配置
    */
-  const [activeTab, setActiveTab] = useState<'Chat' | 'Image' | 'Video'>('Chat');
+  const activeTab: 'Image' = 'Image';
 
   /**
    * 本地编辑状态
@@ -733,35 +731,15 @@ export function ApiSettingsModal({
           </button>
         </div>
 
-        {/* 导航 Tabs */}
+        {/* 类型栏（当前固定为 Image） */}
         <div className="flex px-6 border-b border-white/10 text-[14px] select-none">
-          {(['Chat', 'Image', 'Video'] as const).map((tab) => {
-            // 计算每种类型的配置数量
-            const count = configs.filter((c) => c.apiType === tab).length;
-            const isActive = activeTab === tab;
-
-            return (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`flex items-center gap-2 px-4 py-3 relative top-[1px] transition-colors ${
-                  isActive
-                    ? 'text-blue-400 border-b-2 border-blue-500'
-                    : 'text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                <span>{tab}</span>
-                {/* 配置数量徽章 */}
-                <span
-                  className={`px-1.5 py-0.5 rounded text-[12px] font-medium ${
-                    isActive ? 'bg-white/5 text-blue-300' : 'bg-white/5 text-zinc-400'
-                  }`}
-                >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
+          <div className="flex items-center gap-2 px-4 py-3 relative top-[1px] text-blue-400 border-b-2 border-blue-500">
+            <span>{activeTab}</span>
+            {/* 配置数量徽章 */}
+            <span className="px-1.5 py-0.5 rounded text-[12px] font-medium bg-white/5 text-blue-300">
+              {filteredConfigs.length}
+            </span>
+          </div>
         </div>
 
         {/* 内部可滚动内容区 */}
