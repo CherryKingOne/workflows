@@ -31,7 +31,7 @@
         }
     </style>
 </head>
-<body class="p-10 min-h-screen flex flex-col items-center gap-20">
+<body class="p-10 min-h-screen flex flex-col items-center gap-20 pb-40">
 
     <!-- 全局标题 (复用) -->
     <div class="w-[640px] flex items-center gap-2 mb-2">
@@ -42,72 +42,35 @@
         <span class="text-gray-300 font-medium text-lg tracking-wider">生成图片</span>
     </div>
 
-    <!-- ==========================================
-         状态 1: 点击按钮后的大卡片默认样式 (对应图0/1)
-         ========================================== -->
+    <!-- 状态 1 -->
     <div class="w-[640px]">
         <div class="mb-4 flex items-center gap-2 text-sm text-gray-400 border-l-4 border-purple-500 pl-2">
             <strong>状态 1：</strong> 点击按钮后的默认弹窗样式（初始展开状态）
         </div>
-        
-        <!-- 卡片主体 -->
         <div class="relative card-bg border border-white/10 rounded-2xl w-[600px] h-[480px] p-5 flex flex-col justify-between shadow-2xl ml-4">
-            <!-- 左侧输入点 -->
             <div class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 bg-neutral-600 rounded-full border-2 border-neutral-400 cursor-pointer hover:bg-neutral-400 transition-colors" title="输入"></div>
-            <!-- 右侧输出点 -->
             <div class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-neutral-600 rounded-full border-2 border-neutral-400 cursor-pointer hover:bg-neutral-400 transition-colors" title="输出"></div>
-            
-            <!-- 输入区域 -->
-            <div class="text-gray-400 text-xl tracking-wide pt-6 pl-4 font-light">
-                输入提示词...
-            </div>
-
-            <!-- 底部工具栏 -->
+            <div class="text-gray-400 text-xl tracking-wide pt-6 pl-4 font-light">输入提示词...</div>
             <div class="flex items-center gap-3 w-full">
-                <!-- 模型名称框 -->
-                <div class="input-bg border border-white/10 rounded-lg px-4 py-2 flex-1 text-gray-200 text-sm flex items-center">
-                    Qwen Image Edit
-                </div>
-                <!-- 参数按钮 -->
+                <div class="input-bg border border-white/10 rounded-lg px-4 py-2 flex-1 text-gray-200 text-sm flex items-center">Qwen Image Edit</div>
                 <button class="card-bg border border-white/10 hover:bg-white/5 transition rounded-lg px-4 py-2 text-gray-300 text-sm">1:1</button>
                 <button class="card-bg border border-white/10 hover:bg-white/5 transition rounded-lg px-4 py-2 text-gray-300 text-sm">1K</button>
-                <!-- 播放按钮 -->
-                <button class="card-bg border border-white/10 hover:bg-white/5 transition rounded-lg w-9 h-9 flex items-center justify-center">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9-14 9V3z"></path></svg>
-                </button>
-                <!-- 收起/展开图标 -->
-                <button class="text-gray-500 hover:text-gray-300 transition w-6 flex justify-center">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg>
-                </button>
+                <button class="card-bg border border-white/10 hover:bg-white/5 transition rounded-lg w-9 h-9 flex items-center justify-center"><svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9-14 9V3z"></path></svg></button>
+                <button class="text-gray-500 hover:text-gray-300 transition w-6 flex justify-center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg></button>
             </div>
         </div>
     </div>
 
-
-    <!-- ==========================================
-         状态 2: 鼠标悬浮在卡片上的样式 (对应图2/5)
-         ========================================== -->
+    <!-- 状态 2 -->
     <div class="w-[640px]">
         <div class="mb-4 flex items-center gap-2 text-sm text-gray-400 border-l-4 border-blue-500 pl-2">
             <strong>状态 2：</strong> 点击后并且鼠标停留在卡片中显示的样式（出现关闭和添加按钮）
         </div>
-        
-        <!-- 卡片主体 (同上，新增绝对定位按钮) -->
         <div class="relative card-bg border border-white/10 rounded-2xl w-[600px] h-[480px] p-5 flex flex-col justify-between shadow-2xl ml-4">
-            
-            <!-- 右上角关闭按钮 (Hover出现) -->
-            <button class="absolute top-[-10px] right-[-10px] w-7 h-7 bg-[#27272a] border border-white/10 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700 transition z-10">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
-            </button>
-
-            <!-- 左侧输入点 -->
+            <button class="absolute top-[-10px] right-[-10px] w-7 h-7 bg-[#27272a] border border-white/10 rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-700 transition z-10"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"></path></svg></button>
             <div class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 bg-neutral-600 rounded-full border-2 border-neutral-400 cursor-pointer hover:bg-neutral-400 transition-colors" title="输入"></div>
-            <!-- 右侧输出点 -->
             <div class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-neutral-600 rounded-full border-2 border-neutral-400 cursor-pointer hover:bg-neutral-400 transition-colors" title="输出"></div>
-            
             <div class="text-gray-400 text-xl tracking-wide pt-6 pl-4 font-light">输入提示词...</div>
-
-            <!-- 底部工具栏 -->
             <div class="flex items-center gap-3 w-full">
                 <div class="input-bg border border-white/10 rounded-lg px-4 py-2 flex-1 text-gray-200 text-sm flex items-center">Qwen Image Edit</div>
                 <button class="card-bg border border-white/10 rounded-lg px-4 py-2 text-gray-300 text-sm">1:1</button>
@@ -118,27 +81,125 @@
         </div>
     </div>
 
-
-    <!-- ==========================================
-         状态 3: 关闭激活状态的样式 (收起状态) (对应图3)
-         ========================================== -->
+    <!-- 状态 3 -->
     <div class="w-[640px]">
         <div class="mb-4 flex items-center gap-2 text-sm text-gray-400 border-l-4 border-gray-500 pl-2">
             <strong>状态 3：</strong> 关闭大卡片后，变成收起状态的小条（非激活状态）
         </div>
-        
-        <!-- 收起卡片主体 -->
         <div class="relative card-bg border border-white/10 rounded-2xl w-[600px] p-3 flex flex-col shadow-xl ml-4">
-            <!-- 左侧输入点 -->
             <div class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 bg-neutral-600 rounded-full border-2 border-neutral-400 cursor-pointer hover:bg-neutral-400 transition-colors" title="输入"></div>
-            <!-- 右侧输出点 -->
             <div class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-neutral-600 rounded-full border-2 border-neutral-400 cursor-pointer hover:bg-neutral-400 transition-colors" title="输出"></div>
-            
-            <!-- 工具栏 (与大卡片底部相同，但移除了“异步”按钮，保持和图3一致) -->
             <div class="flex items-center gap-3 w-full">
-                <div class="input-bg border border-white/10 rounded-lg px-4 py-2 flex-1 text-gray-200 text-sm flex items-center">
-                    Qwen Image Edit
+                <div class="input-bg border border-white/10 rounded-lg px-4 py-2 flex-1 text-gray-200 text-sm flex items-center">Qwen Image Edit</div>
+                <button class="card-bg border border-white/10 hover:bg-white/5 transition rounded-lg px-4 py-2 text-gray-300 text-sm">1:1</button>
+                <button class="card-bg border border-white/10 hover:bg-white/5 transition rounded-lg px-4 py-2 text-gray-300 text-sm">1K</button>
+                <button class="card-bg border border-white/10 hover:bg-white/5 transition rounded-lg w-9 h-9 flex items-center justify-center"><svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9-14 9V3z"></path></svg></button>
+                <button class="text-gray-500 hover:text-gray-300 transition w-6 flex justify-center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg></button>
+            </div>
+            <div class="w-full flex justify-center mt-2"><div class="w-10 h-1 bg-[#3f3f46] rounded-full"></div></div>
+        </div>
+    </div>
+
+    <!-- 状态 4 -->
+    <div class="w-[640px]">
+        <div class="mb-4 flex items-center gap-2 text-sm text-gray-400 border-l-4 border-[#3b82f6] pl-2">
+            <strong>状态 4：</strong> 在收起状态下，鼠标停放或点击输入框触发的激活状态（出现蓝色描边和输入框）
+        </div>
+        <div class="relative w-[600px] ml-4 flex flex-col gap-2">
+            <div class="absolute left-0 top-[32px] -translate-x-1/2 w-3 h-3 bg-neutral-600 rounded-full border-2 border-neutral-400 cursor-pointer hover:bg-neutral-400 transition-colors z-20" title="输入"></div>
+            <div class="absolute right-0 top-[32px] translate-x-1/2 w-3 h-3 bg-neutral-600 rounded-full border-2 border-neutral-400 cursor-pointer hover:bg-neutral-400 transition-colors z-20" title="输出"></div>
+            <div class="relative card-bg border border-white/10 rounded-2xl w-full p-3 flex flex-col shadow-xl z-10">
+                <div class="flex items-center gap-3 w-full">
+                    <div class="input-bg border border-white/10 rounded-lg px-4 py-2 flex-1 text-gray-200 text-sm flex items-center">Qwen Image Edit</div>
+                    <button class="card-bg border border-white/10 rounded-lg px-4 py-2 text-gray-300 text-sm">1:1</button>
+                    <button class="card-bg border border-white/10 rounded-lg px-4 py-2 text-gray-300 text-sm">1K</button>
+                    <button class="card-bg border border-white/10 rounded-lg w-9 h-9 flex items-center justify-center"><svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9-14 9V3z"></path></svg></button>
+                    <button class="text-gray-500 w-6 flex justify-center"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg></button>
                 </div>
+                <div class="w-full flex justify-center mt-2"><div class="w-12 h-1 bg-blue-600 rounded-full shadow-[0_0_8px_rgba(37,99,235,0.6)]"></div></div>
+            </div>
+            <div class="relative card-bg border border-white/10 rounded-2xl w-full h-[180px] p-2 shadow-xl">
+                <div class="w-full h-full border border-blue-900/50 bg-[#161619] rounded-xl p-4 flex items-start ring-1 ring-blue-500/20 shadow-[inset_0_0_20px_rgba(37,99,235,0.05)]">
+                    <div class="flex items-center text-gray-400 text-xl tracking-wide font-light gap-[2px]">
+                        <div class="w-[2px] h-[22px] bg-gray-500 animate-pulse"></div>输入提示词...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         状态 5: 点击模型选择器，展开下拉菜单的样式 (新增)
+         ========================================== -->
+    <div class="w-[640px]">
+        <div class="mb-4 flex items-center gap-2 text-sm text-gray-400 border-l-4 border-green-500 pl-2">
+            <strong>状态 5：</strong> 点击左下角模型名称后，弹出的模型列表菜单
+        </div>
+        
+        <!-- 卡片主体 (保持和状态1基本一致) -->
+        <div class="relative card-bg border border-white/10 rounded-2xl w-[600px] h-[480px] p-5 flex flex-col justify-between shadow-2xl ml-4">
+            <!-- 节点 -->
+            <div class="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 bg-neutral-600 rounded-full border-2 border-neutral-400 cursor-pointer z-10" ></div>
+            <div class="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-3 h-3 bg-neutral-600 rounded-full border-2 border-neutral-400 cursor-pointer z-10" ></div>
+            
+            <div class="text-gray-400 text-xl tracking-wide pt-6 pl-4 font-light">
+                输入提示词...
+            </div>
+
+            <!-- 底部工具栏 -->
+            <div class="flex items-center gap-3 w-full relative">
+                
+                <!-- 【修改点】将原来的 div 改为 relative wrapper 包含 button 和 弹窗 -->
+                <div class="relative flex-1">
+                    <!-- 触发器按钮 (添加了向上的箭头，表示展开状态，且边框稍微高亮) -->
+                    <button class="w-full input-bg border border-white/20 rounded-lg px-4 py-2 text-gray-200 text-sm flex items-center justify-between cursor-pointer transition">
+                        <span>Qwen Image...</span>
+                        <!-- 向上箭头 -->
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-400"><path d="M18 15l-6-6-6 6"/></svg>
+                    </button>
+
+                    <!-- 【新增】下拉菜单弹窗 -->
+                    <!-- 定位：top-full 表示紧贴按钮底部，mt-2 留出间隙。z-50 确保覆盖在最上层 -->
+                    <div class="absolute top-[calc(100%+8px)] left-0 w-[260px] card-bg border border-white/10 rounded-xl p-1.5 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)] z-50 flex flex-col gap-1">
+                        
+                        <!-- 选中项 (深色底，白色标题，带勾选图标) -->
+                        <button class="w-full text-left p-2.5 rounded-lg bg-[#27272a] hover:bg-white/10 transition flex items-center justify-between">
+                            <div>
+                                <div class="text-white text-[15px] font-medium tracking-wide">Qwen Image Edit</div>
+                                <div class="text-gray-400 text-[13px] mt-0.5">通义万相图像编辑模型</div>
+                            </div>
+                            <!-- 勾选图标 -->
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        </button>
+
+                        <!-- 未选中项 1 -->
+                        <button class="w-full text-left p-2.5 rounded-lg hover:bg-white/5 transition flex items-center justify-between group">
+                            <div>
+                                <div class="text-gray-300 group-hover:text-white text-[15px] font-medium tracking-wide transition-colors">FLUX.1 Dev</div>
+                                <div class="text-[#71717a] group-hover:text-gray-400 text-[13px] mt-0.5 transition-colors">高质量图像生成模型</div>
+                            </div>
+                        </button>
+
+                        <!-- 未选中项 2 -->
+                        <button class="w-full text-left p-2.5 rounded-lg hover:bg-white/5 transition flex items-center justify-between group">
+                            <div>
+                                <div class="text-gray-300 group-hover:text-white text-[15px] font-medium tracking-wide transition-colors">SDXL</div>
+                                <div class="text-[#71717a] group-hover:text-gray-400 text-[13px] mt-0.5 transition-colors">Stable Diffusion XL</div>
+                            </div>
+                        </button>
+
+                        <!-- 未选中项 3 -->
+                        <button class="w-full text-left p-2.5 rounded-lg hover:bg-white/5 transition flex items-center justify-between group">
+                            <div>
+                                <div class="text-gray-300 group-hover:text-white text-[15px] font-medium tracking-wide transition-colors">DALL·E 3</div>
+                                <div class="text-[#71717a] group-hover:text-gray-400 text-[13px] mt-0.5 transition-colors">OpenAI 图像生成模型</div>
+                            </div>
+                        </button>
+
+                    </div>
+                </div>
+
+                <!-- 其他按钮保持不变 -->
                 <button class="card-bg border border-white/10 hover:bg-white/5 transition rounded-lg px-4 py-2 text-gray-300 text-sm">1:1</button>
                 <button class="card-bg border border-white/10 hover:bg-white/5 transition rounded-lg px-4 py-2 text-gray-300 text-sm">1K</button>
                 <button class="card-bg border border-white/10 hover:bg-white/5 transition rounded-lg w-9 h-9 flex items-center justify-center">
@@ -147,61 +208,6 @@
                 <button class="text-gray-500 hover:text-gray-300 transition w-6 flex justify-center">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg>
                 </button>
-            </div>
-            
-            <!-- 底部折叠指示器 (暗色胶囊线) -->
-            <div class="w-full flex justify-center mt-2">
-                <div class="w-10 h-1 bg-[#3f3f46] rounded-full"></div>
-            </div>
-        </div>
-    </div>
-
-
-    <!-- ==========================================
-         状态 4: 收起状态下，再次激活/悬浮的展开输入框样式 (对应图4)
-         ========================================== -->
-    <div class="w-[640px]">
-        <div class="mb-4 flex items-center gap-2 text-sm text-gray-400 border-l-4 border-[#3b82f6] pl-2">
-            <strong>状态 4：</strong> 在收起状态下，鼠标停放或点击输入框触发的激活状态（出现蓝色描边和输入框）
-        </div>
-        
-        <div class="relative w-[600px] ml-4 flex flex-col gap-2">
-            <!-- 左侧输入点 (全局对其) -->
-            <div class="absolute left-0 top-[32px] -translate-x-1/2 w-3 h-3 bg-neutral-600 rounded-full border-2 border-neutral-400 cursor-pointer hover:bg-neutral-400 transition-colors z-20" title="输入"></div>
-            <!-- 右侧输出点 -->
-            <div class="absolute right-0 top-[32px] translate-x-1/2 w-3 h-3 bg-neutral-600 rounded-full border-2 border-neutral-400 cursor-pointer hover:bg-neutral-400 transition-colors z-20" title="输出"></div>
-
-            <!-- 上方控制条 (同状态3，但指示器变蓝) -->
-            <div class="relative card-bg border border-white/10 rounded-2xl w-full p-3 flex flex-col shadow-xl z-10">
-                <div class="flex items-center gap-3 w-full">
-                    <div class="input-bg border border-white/10 rounded-lg px-4 py-2 flex-1 text-gray-200 text-sm flex items-center">
-                        Qwen Image Edit
-                    </div>
-                    <button class="card-bg border border-white/10 rounded-lg px-4 py-2 text-gray-300 text-sm">1:1</button>
-                    <button class="card-bg border border-white/10 rounded-lg px-4 py-2 text-gray-300 text-sm">1K</button>
-                    <button class="card-bg border border-white/10 rounded-lg w-9 h-9 flex items-center justify-center">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M5 3l14 9-14 9V3z"></path></svg>
-                    </button>
-                    <button class="text-gray-500 w-6 flex justify-center">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg>
-                    </button>
-                </div>
-                <!-- 激活状态的蓝色指示器 -->
-                <div class="w-full flex justify-center mt-2">
-                    <div class="w-12 h-1 bg-blue-600 rounded-full shadow-[0_0_8px_rgba(37,99,235,0.6)]"></div>
-                </div>
-            </div>
-
-            <!-- 下方展开的输入框面板 -->
-            <div class="relative card-bg border border-white/10 rounded-2xl w-full h-[180px] p-2 shadow-xl">
-                <!-- 内部蓝色激活高亮边框 -->
-                <div class="w-full h-full border border-blue-900/50 bg-[#161619] rounded-xl p-4 flex items-start ring-1 ring-blue-500/20 shadow-[inset_0_0_20px_rgba(37,99,235,0.05)]">
-                    <div class="flex items-center text-gray-400 text-xl tracking-wide font-light gap-[2px]">
-                        <!-- 模拟光标 -->
-                        <div class="w-[2px] h-[22px] bg-gray-500 animate-pulse"></div>
-                        输入提示词...
-                    </div>
-                </div>
             </div>
         </div>
     </div>
