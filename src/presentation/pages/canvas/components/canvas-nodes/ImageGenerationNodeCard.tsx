@@ -353,45 +353,63 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
               {/* 下拉菜单 */}
               {isModelDropdownOpen && (
                 <div
-                  className="nodrag absolute left-0 top-full z-50 mt-2 min-w-[180px] rounded-xl border border-white/10 bg-[#0f0f10] py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.6)] backdrop-blur-md"
+                  className="nodrag absolute left-0 top-full z-50 mt-2 w-[280px] rounded-xl border border-white/10 bg-[#0f0f10] p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.6)] backdrop-blur-md"
                   role="listbox"
                 >
-                  {IMAGE_MODEL_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
-                        modelName === option.value
-                          ? 'bg-white/10 text-white'
-                          : 'text-neutral-400 hover:bg-white/5 hover:text-white'
-                      }`}
-                      role="option"
-                      aria-selected={modelName === option.value}
-                      onClick={() => handleSelectModel(option.value)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium">{option.label}</span>
-                        {modelName === option.value && (
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="14"
-                            height="14"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M20 6 9 17l-5-5" />
-                          </svg>
-                        )}
-                      </div>
-                      {option.description && (
-                        <div className="mt-0.5 text-xs text-neutral-500">{option.description}</div>
-                      )}
-                    </button>
-                  ))}
+                  {IMAGE_MODEL_OPTIONS.map((option) => {
+                    const isSelected = modelName === option.value;
+                    const isConfigured = option.isConfigured !== false;
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        className={`group w-full rounded-lg p-2.5 text-left transition-colors ${
+                          isSelected
+                            ? 'bg-white/10 text-white'
+                            : 'text-neutral-400 hover:bg-white/5 hover:text-white'
+                        } ${!isConfigured ? 'opacity-80 hover:opacity-100' : ''}`}
+                        role="option"
+                        aria-selected={isSelected}
+                        onClick={() => handleSelectModel(option.value)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className={`text-[15px] font-medium tracking-wide ${isSelected ? 'text-white' : 'text-neutral-300 group-hover:text-white'}`}>
+                              {option.label}
+                            </div>
+                            {option.description && (
+                              <div className={`mt-0.5 text-[13px] ${isSelected ? 'text-neutral-400' : 'text-neutral-500 group-hover:text-neutral-400'}`}>
+                                {option.description}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {!isConfigured && (
+                              <span className="ml-2 whitespace-nowrap rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium tracking-wide text-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.15)] transition-shadow group-hover:shadow-[0_0_12px_rgba(251,191,36,0.25)]">
+                                未配置 Key
+                              </span>
+                            )}
+                            {isSelected && (
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -465,45 +483,63 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
                 {/* 下拉菜单 */}
                 {isModelDropdownOpen && (
                   <div
-                    className="nodrag absolute left-0 top-full z-50 mt-2 min-w-[180px] rounded-xl border border-white/10 bg-[#0f0f10] py-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.6)] backdrop-blur-md"
+                    className="nodrag absolute left-0 top-full z-50 mt-2 w-[280px] rounded-xl border border-white/10 bg-[#0f0f10] p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.6)] backdrop-blur-md"
                     role="listbox"
                   >
-                    {IMAGE_MODEL_OPTIONS.map((option) => (
-                      <button
-                        key={option.value}
-                        type="button"
-                        className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
-                          modelName === option.value
-                            ? 'bg-white/10 text-white'
-                            : 'text-neutral-400 hover:bg-white/5 hover:text-white'
-                        }`}
-                        role="option"
-                        aria-selected={modelName === option.value}
-                        onClick={() => handleSelectModel(option.value)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{option.label}</span>
-                          {modelName === option.value && (
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2.5"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            >
-                              <path d="M20 6 9 17l-5-5" />
-                            </svg>
-                          )}
-                        </div>
-                        {option.description && (
-                          <div className="mt-0.5 text-xs text-neutral-500">{option.description}</div>
-                        )}
-                      </button>
-                    ))}
+                    {IMAGE_MODEL_OPTIONS.map((option) => {
+                      const isSelected = modelName === option.value;
+                      const isConfigured = option.isConfigured !== false;
+
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`group w-full rounded-lg p-2.5 text-left transition-colors ${
+                            isSelected
+                              ? 'bg-white/10 text-white'
+                              : 'text-neutral-400 hover:bg-white/5 hover:text-white'
+                          } ${!isConfigured ? 'opacity-80 hover:opacity-100' : ''}`}
+                          role="option"
+                          aria-selected={isSelected}
+                          onClick={() => handleSelectModel(option.value)}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className={`text-[15px] font-medium tracking-wide ${isSelected ? 'text-white' : 'text-neutral-300 group-hover:text-white'}`}>
+                                {option.label}
+                              </div>
+                              {option.description && (
+                                <div className={`mt-0.5 text-[13px] ${isSelected ? 'text-neutral-400' : 'text-neutral-500 group-hover:text-neutral-400'}`}>
+                                  {option.description}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {!isConfigured && (
+                                <span className="ml-2 whitespace-nowrap rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium tracking-wide text-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.15)] transition-shadow group-hover:shadow-[0_0_12px_rgba(251,191,36,0.25)]">
+                                  未配置 Key
+                                </span>
+                              )}
+                              {isSelected && (
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="16"
+                                  height="16"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                >
+                                  <polyline points="20 6 9 17 4 12" />
+                                </svg>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>

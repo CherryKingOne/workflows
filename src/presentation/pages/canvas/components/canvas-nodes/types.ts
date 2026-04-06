@@ -134,6 +134,18 @@ export interface ImageModelOption {
   value: ImageGenerationModelId;
   label: string;
   description?: string;
+  /**
+   * 模型是否已配置 API Key
+   *
+   * 用途：
+   * - 未配置时在下拉列表中显示橙黄色"未配置 Key"标签
+   * - 提示用户需要先在设置中配置对应模型的 API Key 才能使用
+   *
+   * 后续接后端时：
+   * - 可从后端获取用户已配置的模型列表
+   * - 或从后端获取模型配置状态
+   */
+  isConfigured?: boolean;
 }
 
 /**
@@ -155,21 +167,25 @@ export const IMAGE_MODEL_OPTIONS: ImageModelOption[] = [
     value: 'qwen-image-edit',
     label: 'Qwen Image Edit',
     description: '通义万相图像编辑模型',
+    isConfigured: true,
   },
   {
     value: 'flux-1-dev',
     label: 'FLUX.1 Dev',
     description: '高质量图像生成模型',
+    isConfigured: true,
   },
   {
     value: 'stable-diffusion-xl',
     label: 'SDXL',
     description: 'Stable Diffusion XL',
+    isConfigured: false,
   },
   {
     value: 'dall-e-3',
     label: 'DALL·E 3',
     description: 'OpenAI 图像生成模型',
+    isConfigured: false,
   },
 ];
 
