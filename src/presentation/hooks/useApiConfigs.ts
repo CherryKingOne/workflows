@@ -144,36 +144,12 @@ interface UseApiConfigsReturn {
 function generateMockConfigs(): ApiConfigData[] {
   return [
     {
-      id: 'mock-1',
-      modelId: 'gpt-5.4',
-      apiKey: 'sk-abc123def456',
-      baseUrl: 'https://ai.comfly.chat',
-      apiType: 'Chat',
-      isEnabled: true,
-    },
-    {
-      id: 'mock-2',
-      modelId: 'gpt-5.4-pro',
-      apiKey: 'sk-xyz789ghi012',
-      baseUrl: 'https://ai.comfly.chat',
-      apiType: 'Chat',
-      isEnabled: true,
-    },
-    {
       id: 'mock-3',
-      modelId: 'dall-e-3',
-      apiKey: 'sk-img123abc456',
-      baseUrl: 'https://api.openai.com',
+      modelId: 'doubao-seedream-5.0-list',
+      apiKey: 'sk-xxxx',
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
       apiType: 'Image',
       isEnabled: true,
-    },
-    {
-      id: 'mock-4',
-      modelId: 'runway-gen2',
-      apiKey: '',
-      baseUrl: 'https://api.runwayml.com',
-      apiType: 'Video',
-      isEnabled: false,
     },
   ];
 }
