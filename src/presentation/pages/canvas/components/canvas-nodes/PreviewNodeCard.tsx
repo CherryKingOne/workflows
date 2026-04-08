@@ -10,6 +10,7 @@ import {
   useUpdateNodeInternals,
 } from '@xyflow/react';
 import { type PreviewWorkflowNode } from './types';
+import { PreviewMediaModal } from './PreviewMediaModal';
 
 const DEFAULT_CARD_WIDTH = 500;
 const DEFAULT_CARD_HEIGHT = 340;
@@ -71,6 +72,7 @@ const MAX_CARD_HEIGHT = 440;
 export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflowNode>) {
   const updateNodeInternals = useUpdateNodeInternals();
   const [hovered, setHovered] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   /**
    * 尺寸钳制（防止异常值把卡片拉坏）
@@ -270,7 +272,8 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
                 <img
                   src={previewMedia.url}
                   alt={previewMedia.name ?? '预览图片'}
-                  className="h-full w-full rounded-[12px] object-contain"
+                  className="h-full w-full rounded-[12px] object-contain cursor-zoom-in"
+                  onDoubleClick={() => setPreviewOpen(true)}
                 />
               )}
 
@@ -278,16 +281,21 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
                 <video
                   src={previewMedia.url}
                   controls
-                  className="h-full w-full rounded-[12px] bg-black object-contain"
+                  className="h-full w-full rounded-[12px] bg-black object-contain cursor-zoom-in"
+                  onDoubleClick={() => setPreviewOpen(true)}
                 />
               )}
 
               {isAudioPreview && (
-                <div className="w-full max-w-[360px] rounded-xl border border-white/10 bg-black/35 p-3">
+                <div
+                  className="w-full max-w-[360px] rounded-xl border border-white/10 bg-black/35 p-3 cursor-zoom-in"
+                  onDoubleClick={() => setPreviewOpen(true)}
+                >
                   <p className="mb-2 truncate text-[12px] text-[#9a9a9c]">
                     {previewMedia.name ?? '音频预览'}
                   </p>
                   <audio src={previewMedia.url} controls className="w-full" />
+                  <p className="mt-1 text-center text-[10px] text-neutral-600 select-none">双击放大</p>
                 </div>
               )}
             </>
@@ -419,6 +427,15 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
           animation: preview-node-loading-front 2.2s cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
         }
       `}</style>
+
+      {previewOpen && previewMedia?.url && (
+        <PreviewMediaModal
+          url={previewMedia.url}
+          mimeType={previewMedia.mimeType}
+          name={previewMedia.name}
+          onClose={() => setPreviewOpen(false)}
+        />
+      )}
     </div>
   );
 }

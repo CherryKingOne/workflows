@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Handle,
   NodeProps,
@@ -10,6 +10,7 @@ import {
   useUpdateNodeInternals,
 } from '@xyflow/react';
 import { type FileUploadWorkflowNode } from './types';
+import { MediaPreviewModal } from './MediaPreviewModal';
 
 /**
  * 上传文件节点卡片（React Flow 自定义节点）
@@ -27,6 +28,7 @@ import { type FileUploadWorkflowNode } from './types';
  * - 新增行为（例如重试上传、查看日志）通过回调函数继续向上抛给装配层
  */
 export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadWorkflowNode>) {
+  const [previewOpen, setPreviewOpen] = useState(false);
   /**
    * 获取“无后缀”的展示名
    *
@@ -186,14 +188,16 @@ export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadW
               <img
                 src={firstAsset.previewUrl}
                 alt={firstAsset.name}
-                className="absolute inset-0 h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full object-cover cursor-zoom-in"
+                onDoubleClick={() => setPreviewOpen(true)}
               />
             )}
             {isVideoAsset && (
               <video
                 src={firstAsset.previewUrl}
                 controls
-                className="absolute inset-0 h-full w-full object-cover bg-black"
+                className="absolute inset-0 h-full w-full object-cover bg-black cursor-zoom-in"
+                onDoubleClick={() => setPreviewOpen(true)}
               />
             )}
           </>
@@ -318,8 +322,28 @@ export function FileUploadNodeCard({ id, data, selected }: NodeProps<FileUploadW
 
       {hasSelectedAssets && isAudioAsset && firstAsset?.previewUrl && (
         <div className="z-10 w-[220px] rounded-lg border border-white/10 bg-black/35 px-2 py-2">
-          <audio src={firstAsset.previewUrl} controls className="nodrag nowheel w-full h-8" />
+          <audio
+            src={firstAsset.previewUrl}
+            controls
+            className="nodrag nowheel w-full h-8"
+            onDoubleClick={() => setPreviewOpen(true)}
+          />
+          <p
+            className="mt-1 text-center text-[10px] text-neutral-500 cursor-zoom-in select-none"
+            onDoubleClick={() => setPreviewOpen(true)}
+          >
+            双击放大
+          </p>
         </div>
+      )}
+
+      {previewOpen && firstAsset?.previewUrl && (
+        <MediaPreviewModal
+          url={firstAsset.previewUrl}
+          mimeType={firstAsset.mimeType}
+          name={firstAsset.name}
+          onClose={() => setPreviewOpen(false)}
+        />
       )}
 
       <style jsx>{`
