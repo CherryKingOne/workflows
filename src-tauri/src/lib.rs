@@ -9,6 +9,9 @@ use application::storage::upload_service::CanvasFileUploadService;
 use infrastructure::persistence::sqlite::project_repo::SqliteProjectRepository;
 use infrastructure::persistence::sqlite::qiniu_config_repo::SqliteQiniuConfigRepository;
 use infrastructure::storage::qiniu_uploader::QiniuSdkUploader;
+use infrastructure::model_config_repository::SqliteModelConfigRepository;
+use commands::model_config::ModelConfigState;
+use std::sync::Mutex;
 use std::fs;
 use tauri::Manager;
 
@@ -55,6 +58,13 @@ pub fn run() {
                 CanvasFileUploadService::new(qiniu_repo, QiniuSdkUploader::new());
             app.manage(file_upload_service);
 
+            // 初始化模型配置仓储
+            let model_config_db_path = app_data_dir.join("models.db");
+            let model_config_repo = SqliteModelConfigRepository::new(model_config_db_path);
+            app.manage(ModelConfigState {
+                repository: Mutex::new(model_config_repo),
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -65,6 +75,11 @@ pub fn run() {
             commands::storage::get_qiniu_config,
             commands::storage::save_qiniu_config,
             commands::storage::upload_canvas_file_asset,
+            commands::model_config::get_all_model_configs,
+            commands::model_config::get_model_config,
+            commands::model_config::update_model_config,
+            commands::model_config::init_model_configs,
+            commands::model_config::delete_model_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

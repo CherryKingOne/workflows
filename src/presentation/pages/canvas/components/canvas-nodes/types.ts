@@ -91,20 +91,20 @@ export type FileUploadWorkflowNode = Node<FileUploadNodeData, typeof FILE_UPLOAD
  * - 当前原型里展示的是固定比例按钮（例如 1:1）
  * - 用联合类型能让后续 UI 按钮和后端参数约束保持一致
  *
- * 后续如需支持“任意宽高自定义”，建议新增：
+ * 后续如需支持”任意宽高自定义”，建议新增：
  * - `custom` 类型
  * - 对应的宽高数值字段
  */
-export type ImageGenerationAspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9';
+export type ImageGenerationAspectRatio = '1:1' | '3:4' | '4:3' | '9:16' | '16:9' | '3:2' | '2:3' | '21:9';
 
 /**
  * 图片生成分辨率档位
  *
- * 这是一层“展示层可读值”，后续后端可在应用层做映射，例如：
- * - `1K` -> 1024
+ * 这是一层”展示层可读值”，后续后端可在应用层做映射，例如：
  * - `2K` -> 2048
+ * - `3K` -> 3072
  */
-export type ImageGenerationResolution = '1K' | '2K';
+export type ImageGenerationResolution = '2K' | '3K';
 
 /**
  * 图片生成模型标识
@@ -112,26 +112,22 @@ export type ImageGenerationResolution = '1K' | '2K';
  * 说明：
  * - 这里定义的是前端可选择的图片生成模型 ID
  * - 与后端注册表中的 model_name 对应
- * - 后续新增模型只需在此处添加新值，并在 MODEL_OPTIONS 中补充展示信息
+ * - 模型列表现在从后端动态获取，不再使用静态列表
  *
- * 扩展建议（后续接后端）：
- * - 模型列表应从后端 list_models('Image') 动态获取
- * - 当前阶段先使用静态列表作为前端 UI 骨架
+ * 扩展建议：
+ * - 模型列表通过 useModelConfig('image') 从后端获取
+ * - 后端通过 Tauri Commands 返回已配置的模型
  */
-export type ImageGenerationModelId =
-  | 'qwen-image-edit'
-  | 'flux-1-dev'
-  | 'stable-diffusion-xl'
-  | 'dall-e-3';
+export type ImageGenerationModelId = string;
 
 /**
  * 图片生成模型展示信息
  *
  * 用于在 UI 下拉列表中展示模型名称和简短描述。
- * 后续可扩展更多信息（如模型图标、能力标签等）。
+ * 现在从后端 ModelConfig 动态生成。
  */
 export interface ImageModelOption {
-  value: ImageGenerationModelId;
+  value: string;
   label: string;
   description?: string;
   /**
@@ -141,64 +137,10 @@ export interface ImageModelOption {
    * - 未配置时在下拉列表中显示橙黄色"未配置 Key"标签
    * - 提示用户需要先在设置中配置对应模型的 API Key 才能使用
    *
-   * 后续接后端时：
-   * - 可从后端获取用户已配置的模型列表
-   * - 或从后端获取模型配置状态
+   * 从后端获取：
+   * - 通过 ModelConfig.enabled && ModelConfig.api_key 判断
    */
   isConfigured?: boolean;
-}
-
-/**
- * 图片生成模型选项列表
- *
- * 当前为静态列表，后续可改为从后端动态获取。
- * 根据文档《模型调用开发.txt》中注册表示意：
- * - Image:
- *   - qwen-image-edit
- *   - flux-1-dev
- *
- * 新增模型步骤：
- * 1. 在 ImageGenerationModelId 中添加新模型 ID
- * 2. 在此数组中添加对应展示信息
- * 3. 后端在注册表中注册该模型
- */
-export const IMAGE_MODEL_OPTIONS: ImageModelOption[] = [
-  {
-    value: 'qwen-image-edit',
-    label: 'Qwen Image Edit',
-    description: '通义万相图像编辑模型',
-    isConfigured: true,
-  },
-  {
-    value: 'flux-1-dev',
-    label: 'FLUX.1 Dev',
-    description: '高质量图像生成模型',
-    isConfigured: true,
-  },
-  {
-    value: 'stable-diffusion-xl',
-    label: 'SDXL',
-    description: 'Stable Diffusion XL',
-    isConfigured: false,
-  },
-  {
-    value: 'dall-e-3',
-    label: 'DALL·E 3',
-    description: 'OpenAI 图像生成模型',
-    isConfigured: false,
-  },
-];
-
-/**
- * 根据模型 ID 获取模型展示信息
- *
- * @param modelId - 模型标识
- * @returns 模型展示信息，未找到时返回默认模型
- */
-export function getImageModelOption(modelId: string): ImageModelOption {
-  return (
-    IMAGE_MODEL_OPTIONS.find((opt) => opt.value === modelId) ?? IMAGE_MODEL_OPTIONS[0]
-  );
 }
 
 /**
@@ -216,6 +158,7 @@ export interface ImageGenerationPromptDraft {
   modelName: string;
   aspectRatio: ImageGenerationAspectRatio;
   resolution: ImageGenerationResolution;
+  imageCount: number;
 }
 
 /**
@@ -237,6 +180,17 @@ export interface ImageGenerationNodeData extends Record<string, unknown> {
   modelName: string;
   aspectRatio: ImageGenerationAspectRatio;
   resolution: ImageGenerationResolution;
+  imageCount: number;
+  generationStatus?: 'idle' | 'loading' | 'ready' | 'error';
+  generationErrorMessage?: string;
+  generatedMedia?: {
+    kind: 'image';
+    url: string;
+    mimeType: string;
+    name?: string;
+    storageProvider?: 'qiniu' | 'base64';
+    objectKey?: string;
+  };
   cardWidth?: number;
   expandedHeight?: number;
   collapsedHeight?: number;
@@ -251,6 +205,9 @@ export interface ImageGenerationNodeData extends Record<string, unknown> {
    * 由 CanvasBoard（装配层）接住并决定是否持久化。
    */
   onRequestUpdateModelName?: (nodeId: string, nextModelName: string) => void;
+  onRequestUpdateAspectRatio?: (nodeId: string, nextAspectRatio: ImageGenerationAspectRatio) => void;
+  onRequestUpdateResolution?: (nodeId: string, nextResolution: ImageGenerationResolution) => void;
+  onRequestUpdateImageCount?: (nodeId: string, nextImageCount: number) => void;
 }
 
 /**
@@ -411,9 +368,10 @@ export interface PreviewNodeData extends Record<string, unknown> {
    * 预览状态
    *
    * - `empty`: 未连接或无可渲染素材
+   * - `loading`: 上游图片节点正在生成，预览卡片展示加载动画
    * - `ready`: 已有可渲染媒体
    */
-  previewStatus?: 'empty' | 'ready';
+  previewStatus?: 'empty' | 'loading' | 'ready';
   /**
    * 预览错误文案（例如连接了无效来源）
    */

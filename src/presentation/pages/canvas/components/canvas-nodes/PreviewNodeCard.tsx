@@ -5,7 +5,6 @@ import {
   Handle,
   type NodeProps,
   Position,
-  useConnection,
   useNodeConnections,
   useUpdateNodeInternals,
 } from '@xyflow/react';
@@ -109,44 +108,6 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
    * - 输出点仍保持“仅激活态显示”。
    */
   const shouldShowInputHandle = isNodeActive || hasIncomingSourceOnInputHandle;
-  const connectionPreview = useConnection((connection) => {
-    if (!connection.inProgress || !connection.fromNode) {
-      return {
-        inProgress: false,
-        fromNodeId: null as string | null,
-        toNodeId: null as string | null,
-        toHandleId: null as string | null,
-      };
-    }
-
-    return {
-      inProgress: true,
-      fromNodeId: connection.fromNode.id,
-      toNodeId: connection.toNode?.id ?? null,
-      toHandleId: connection.toHandle?.id ?? null,
-    };
-  });
-
-  /**
-   * 连线命中输入点时显示上下流光（拖线未松手）
-   *
-   * 触发条件（对齐对比卡片）：
-   * 1. 正在拖线；
-   * 2. 当前目标命中本节点 input handle；
-   * 3. 非自己连接自己。
-   */
-  const showConnectionMergeGlow = useMemo(() => {
-    if (!connectionPreview.inProgress) {
-      return false;
-    }
-
-    if (connectionPreview.fromNodeId === id) {
-      return false;
-    }
-
-    return connectionPreview.toNodeId === id && connectionPreview.toHandleId === 'input';
-  }, [connectionPreview.fromNodeId, connectionPreview.inProgress, connectionPreview.toHandleId, connectionPreview.toNodeId, id]);
-
   /**
    * 当节点尺寸或选中态变化时，刷新 React Flow 内部几何缓存。
    *
@@ -173,7 +134,8 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
 
   const previewMedia = data.previewMedia;
   const previewStatus = data.previewStatus ?? (previewMedia?.url ? 'ready' : 'empty');
-  const shouldRenderPreviewMedia = previewStatus === 'ready' && Boolean(previewMedia?.url);
+  const isPreviewLoading = previewStatus === 'loading';
+  const shouldRenderPreviewMedia = Boolean(previewMedia?.url) && (previewStatus === 'ready' || isPreviewLoading);
   const isImagePreview = shouldRenderPreviewMedia && previewMedia?.kind === 'image';
   const isVideoPreview = shouldRenderPreviewMedia && previewMedia?.kind === 'video';
   const isAudioPreview = shouldRenderPreviewMedia && previewMedia?.kind === 'audio';
@@ -244,13 +206,6 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
         }}
       />
 
-      {showConnectionMergeGlow && (
-        <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-[14px]">
-          <div className="preview-node-merge-glint preview-node-merge-glint-top" />
-          <div className="preview-node-merge-glint preview-node-merge-glint-bottom" />
-        </div>
-      )}
-
       {hovered && (
         <button
           type="button"
@@ -311,57 +266,75 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
               <circle cx="12" cy="12" r="1.5" fill="#4a4a4c" />
             </svg>
 
-            {data.previewErrorMessage ? (
-              <p className="text-[13px] tracking-wide text-rose-400">{data.previewErrorMessage}</p>
-            ) : (
-              <>
-                <p className="text-[15px] tracking-wide text-[#999999]">{data.primaryHintText}</p>
-                <p className="mt-3 text-[13px] tracking-wide text-[#666666]">{data.secondaryHintText}</p>
-              </>
-            )}
+            <p className="text-[15px] tracking-wide text-[#999999]">{data.primaryHintText}</p>
+            <p className="mt-3 text-[13px] tracking-wide text-[#666666]">{data.secondaryHintText}</p>
           </>
+        )}
+
+        {isPreviewLoading && (
+          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[12px]">
+            <div className="pointer-events-none preview-node-loading-fill" />
+            <div className="pointer-events-none preview-node-loading-front" />
+          </div>
         )}
       </div>
 
       <style jsx>{`
-        @keyframes preview-node-glint-slide {
+        @keyframes preview-node-loading-fill {
           0% {
-            transform: translateX(-52%);
-            opacity: 0.12;
+            transform: scaleX(0);
+            opacity: 0.18;
           }
-          50% {
-            opacity: 0.92;
+          78% {
+            transform: scaleX(1);
+            opacity: 0.34;
           }
           100% {
-            transform: translateX(52%);
-            opacity: 0.16;
+            transform: scaleX(1);
+            opacity: 0.26;
           }
         }
 
-        .preview-node-merge-glint {
+        @keyframes preview-node-loading-front {
+          0% {
+            transform: translateX(-100%);
+            opacity: 0;
+          }
+          14% {
+            opacity: 0.15;
+          }
+          78% {
+            transform: translateX(0%);
+            opacity: 0.42;
+          }
+          100% {
+            transform: translateX(0%);
+            opacity: 0;
+          }
+        }
+
+        .preview-node-loading-fill {
           position: absolute;
-          left: -26%;
-          width: 152%;
-          height: 2px;
+          inset: 0;
+          transform-origin: left center;
+          background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.08) 0%,
+            rgba(255, 255, 255, 0.24) 100%
+          );
+          animation: preview-node-loading-fill 2.2s cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
+        }
+
+        .preview-node-loading-front {
+          position: absolute;
+          inset: 0;
           background: linear-gradient(
             90deg,
             rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0.06) 18%,
-            rgba(255, 255, 255, 0.92) 50%,
-            rgba(255, 255, 255, 0.06) 82%,
-            rgba(255, 255, 255, 0) 100%
+            rgba(255, 255, 255, 0.38) 98%,
+            rgba(255, 255, 255, 0.12) 100%
           );
-          filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.35));
-          animation: preview-node-glint-slide 1.2s ease-in-out infinite;
-        }
-
-        .preview-node-merge-glint-top {
-          top: 0;
-        }
-
-        .preview-node-merge-glint-bottom {
-          bottom: 0;
-          animation-delay: 0.14s;
+          animation: preview-node-loading-front 2.2s cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
         }
       `}</style>
     </div>

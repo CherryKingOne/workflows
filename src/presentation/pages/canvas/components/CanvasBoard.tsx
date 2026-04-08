@@ -14,12 +14,13 @@ import {
 import { useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { Project } from '../../../../domain/project/entities/Project';
-import { ApiSettingsModal } from './modals/ApiSettingsModal';
+import { ApiSettingsModal } from './modals/ApiSettingsModalNew';
 import { StorageModal } from './modals/StorageModal';
-import { useApiConfigs } from '../../../hooks/useApiConfigs';
 import { useStorage } from '../../../hooks/useStorage';
+import { useModelConfig } from '../../../hooks/useModelConfig';
 import { CanvasNodeLayer } from './canvas-nodes/CanvasNodeLayer';
 import { UploadedAssetFloatingToolbar } from './toolbars/UploadedAssetFloatingToolbar';
+import { aiModelService } from '@/src/application/aiModel/AiModelApplicationService';
 import {
   COMPARE_NODE_TYPE,
   type CanvasWorkflowNode,
@@ -50,11 +51,12 @@ const MAX_COMPARE_NODE_CARD_LONG_SIDE = 460;
 const MIN_COMPARE_NODE_CARD_SHORT_SIDE = 200;
 const DEFAULT_FILE_UPLOAD_CARD_WIDTH = 320;
 const DEFAULT_FILE_UPLOAD_CARD_HEIGHT = 320;
-const DEFAULT_IMAGE_NODE_CARD_WIDTH = 400;
+const DEFAULT_IMAGE_NODE_CARD_WIDTH = 580;
 const DEFAULT_IMAGE_NODE_EXPANDED_HEIGHT = 380;
 const DEFAULT_IMAGE_NODE_COLLAPSED_HEIGHT = 88;
 const DEFAULT_PREVIEW_NODE_CARD_WIDTH = 500;
 const DEFAULT_PREVIEW_NODE_CARD_HEIGHT = 340;
+const PREVIEW_LOADING_MIN_VISIBLE_MS = 700;
 const INITIAL_CANVAS_VIEWPORT: Viewport = { x: -1500, y: -1200, zoom: 0.89 };
 /**
  * 动态卡片尺寸边界（按当前视觉稿收敛）
@@ -114,6 +116,13 @@ function isCompareWorkflowNode(node: CanvasWorkflowNode): node is CompareWorkflo
  */
 function isPreviewWorkflowNode(node: CanvasWorkflowNode): node is PreviewWorkflowNode {
   return node.type === PREVIEW_NODE_TYPE;
+}
+
+/**
+ * 节点类型守卫：是否为“图片生成节点”
+ */
+function isImageGenerationWorkflowNode(node: CanvasWorkflowNode): node is ImageGenerationWorkflowNode {
+  return node.type === IMAGE_GENERATION_NODE_TYPE;
 }
 
 /**
@@ -437,8 +446,11 @@ interface CanvasBoardProps {
 export function CanvasBoard({ project }: CanvasBoardProps) {
   const router = useRouter();
   const canvasNodesRef = useRef<CanvasWorkflowNode[]>([]);
+  const canvasEdgesRef = useRef<Edge[]>([]);
   const toolbarUploadInputRef = useRef<HTMLInputElement | null>(null);
   const toolbarUploadTargetNodeIdRef = useRef<string | null>(null);
+  const { configs: imageModelConfigs } = useModelConfig('image');
+  const imageModelConfigsRef = useRef(imageModelConfigs);
   
   /**
    * 画布视口状态（React Flow viewport）
@@ -655,12 +667,12 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   );
 
   /**
-   * 根据“连线关系 + 上传节点素材”同步预览节点数据。
+   * 根据“连线关系 + 来源节点素材”同步预览节点数据。
    *
    * 规则：
    * 1. 只消费连到 preview 节点的入边；
-   * 2. 来源仅支持上传节点（fileUpload）；
-   * 3. 每个来源节点仅取 `selectedAssets[0]`；
+   * 2. 来源支持上传节点（fileUpload）和图片生成节点（imageGeneration）；
+   * 3. 上传节点取 `selectedAssets[0]`，图片生成节点取 `generatedMedia`；
    * 4. 当存在可渲染素材时，写入 `previewMedia` 并标记 ready；
    * 5. 当连线存在但没有可预览素材时，给出错误文案。
    */
@@ -675,39 +687,68 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
         }
 
         const incomingEdges = edges.filter((edge) => edge.target === node.id);
-        const firstConnectedUploadNode = incomingEdges
+        let hasLoadingImageGenerationSource = false;
+        const firstRenderableMedia = incomingEdges
           .map((edge) => nodeById.get(edge.source))
-          .find(
-            (sourceNode): sourceNode is FileUploadWorkflowNode =>
-              Boolean(sourceNode && isFileUploadWorkflowNode(sourceNode)),
-          );
-
-        const firstAsset = firstConnectedUploadNode?.data.selectedAssets?.[0];
-        const hasRenderableMedia = Boolean(
-          firstAsset?.previewUrl &&
-            (firstAsset.mimeType.startsWith('image/') ||
-              firstAsset.mimeType.startsWith('video/') ||
-              firstAsset.mimeType.startsWith('audio/')),
-        );
-
-        const nextPreviewStatus: 'empty' | 'ready' = hasRenderableMedia ? 'ready' : 'empty';
-        const nextPreviewMedia = hasRenderableMedia && firstAsset
-          ? {
-              kind: firstAsset.mimeType.startsWith('image/')
-                ? 'image'
-                : firstAsset.mimeType.startsWith('video/')
-                  ? 'video'
-                  : 'audio',
-              url: firstAsset.previewUrl ?? '',
-              mimeType: firstAsset.mimeType,
-              name: firstAsset.name,
-              storageProvider: firstAsset.storageProvider,
-              objectKey: firstAsset.objectKey,
+          .map((sourceNode) => {
+            if (!sourceNode) {
+              return null;
             }
-          : undefined;
+
+            if (isFileUploadWorkflowNode(sourceNode)) {
+              const firstAsset = sourceNode.data.selectedAssets?.[0];
+              if (
+                firstAsset?.previewUrl
+                && (firstAsset.mimeType.startsWith('image/')
+                  || firstAsset.mimeType.startsWith('video/')
+                  || firstAsset.mimeType.startsWith('audio/'))
+              ) {
+                return {
+                  kind: (firstAsset.mimeType.startsWith('image/')
+                    ? 'image'
+                    : firstAsset.mimeType.startsWith('video/')
+                      ? 'video'
+                      : 'audio') as 'image' | 'video' | 'audio',
+                  url: firstAsset.previewUrl,
+                  mimeType: firstAsset.mimeType,
+                  name: firstAsset.name,
+                  storageProvider: firstAsset.storageProvider,
+                  objectKey: firstAsset.objectKey,
+                };
+              }
+            }
+
+            if (isImageGenerationWorkflowNode(sourceNode)) {
+              if (sourceNode.data.generationStatus === 'loading') {
+                hasLoadingImageGenerationSource = true;
+              }
+
+              if (sourceNode.data.generatedMedia?.url) {
+                return {
+                  kind: sourceNode.data.generatedMedia.kind,
+                  url: sourceNode.data.generatedMedia.url,
+                  mimeType: sourceNode.data.generatedMedia.mimeType,
+                  name: sourceNode.data.generatedMedia.name,
+                  storageProvider: sourceNode.data.generatedMedia.storageProvider,
+                  objectKey: sourceNode.data.generatedMedia.objectKey,
+                };
+              }
+            }
+
+            return null;
+          })
+          .find((media) => Boolean(media));
+
+        const hasRenderableMedia = Boolean(firstRenderableMedia?.url);
+        const nextPreviewStatus: 'empty' | 'loading' | 'ready' = hasLoadingImageGenerationSource
+          ? 'loading'
+          : hasRenderableMedia
+            ? 'ready'
+            : 'empty';
+        const nextPreviewMedia = hasRenderableMedia ? firstRenderableMedia ?? undefined : undefined;
 
         const nextPreviewErrorMessage =
-          !hasRenderableMedia && incomingEdges.length > 0
+          !hasLoadingImageGenerationSource && !hasRenderableMedia && incomingEdges.length > 0
             ? '当前连接素材不可预览，请检查上传内容'
             : undefined;
 
@@ -979,19 +1020,202 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   }, [uploadFileToBackend]);
 
   /**
-   * 图片节点“生成”动作入口（后端对接预留）
+   * 图片节点“生成”动作入口
    *
-   * 设计目标：
-   * - 节点卡片只负责收集输入并触发事件
-   * - 页面装配层统一承接事件，未来在这里对接 application 层 use case
-   *
-   * 后续后端接入建议：
-   * - 建立 `CreateImageGenerationTaskUseCase`
-   * - 由该 use case 统一处理参数校验、任务创建、状态更新
-   * - infrastructure 层再适配 Tauri/Rust 函数
+   * 打通链路：
+   * - 上传节点 -> 图片节点（作为图生图输入，可多图）
+   * - 图片节点 -> 预览节点（消费生成结果）
    */
-  const handleRequestGenerateImage = useCallback((nodeId: string, draft: ImageGenerationPromptDraft) => {
-    console.info('[UI Placeholder] 图片生成请求待接后端函数。', { nodeId, draft });
+  const handleRequestGenerateImage = useCallback(async (nodeId: string, draft: ImageGenerationPromptDraft) => {
+    const loadingStartedAt = Date.now();
+    const ensurePreviewLoadingVisible = async () => {
+      const elapsed = Date.now() - loadingStartedAt;
+      const remain = PREVIEW_LOADING_MIN_VISIBLE_MS - elapsed;
+      if (remain > 0) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(() => resolve(), remain);
+        });
+      }
+    };
+
+    setCanvasNodes((previousNodes) =>
+      previousNodes.map((node) => {
+        if (!isImageGenerationWorkflowNode(node) || node.id !== nodeId) {
+          return node;
+        }
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            generationStatus: 'loading',
+            generationErrorMessage: undefined,
+          },
+        };
+      }),
+    );
+
+    const latestNodes = canvasNodesRef.current;
+    const latestEdges = canvasEdgesRef.current;
+    const latestImageModelConfigs = imageModelConfigsRef.current;
+    const targetNode = latestNodes.find(
+      (node): node is ImageGenerationWorkflowNode =>
+        isImageGenerationWorkflowNode(node) && node.id === nodeId,
+    );
+    if (!targetNode) {
+      return;
+    }
+
+    const modelId = draft.modelName || targetNode.data.modelName;
+    const modelConfig = latestImageModelConfigs.find((config) => config.model_id === modelId);
+    const promptText = draft.promptText.trim();
+
+    if (!promptText) {
+      await ensurePreviewLoadingVisible();
+      setCanvasNodes((previousNodes) =>
+        previousNodes.map((node) => {
+          if (!isImageGenerationWorkflowNode(node) || node.id !== nodeId) {
+            return node;
+          }
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              generationStatus: 'error',
+              generationErrorMessage: '请输入提示词后再生成',
+            },
+          };
+        }),
+      );
+      return;
+    }
+
+    if (!modelConfig || !modelConfig.enabled || !modelConfig.api_key) {
+      await ensurePreviewLoadingVisible();
+      setCanvasNodes((previousNodes) =>
+        previousNodes.map((node) => {
+          if (!isImageGenerationWorkflowNode(node) || node.id !== nodeId) {
+            return node;
+          }
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              generationStatus: 'error',
+              generationErrorMessage: '当前模型未配置可用 API Key，请先在设置中启用并配置',
+            },
+          };
+        }),
+      );
+      return;
+    }
+
+    const nodeById = new Map(latestNodes.map((node) => [node.id, node]));
+    const referenceImages = Array.from(
+      new Set(
+        latestEdges
+          .filter((edge) => edge.target === nodeId)
+          .map((edge) => nodeById.get(edge.source))
+          .flatMap((sourceNode) => {
+            if (!sourceNode) {
+              return [] as string[];
+            }
+
+            if (isFileUploadWorkflowNode(sourceNode)) {
+              return (sourceNode.data.selectedAssets ?? [])
+                .filter((asset) => asset.mimeType.startsWith('image/') && Boolean(asset.previewUrl))
+                .map((asset) => asset.previewUrl as string);
+            }
+
+            if (isPreviewWorkflowNode(sourceNode)) {
+              if (sourceNode.data.previewMedia?.kind === 'image' && sourceNode.data.previewMedia.url) {
+                return [sourceNode.data.previewMedia.url];
+              }
+              return [];
+            }
+
+            if (isImageGenerationWorkflowNode(sourceNode)) {
+              if (sourceNode.data.generatedMedia?.kind === 'image' && sourceNode.data.generatedMedia.url) {
+                return [sourceNode.data.generatedMedia.url];
+              }
+              return [];
+            }
+
+            return [];
+          }),
+      ),
+    );
+
+    try {
+      const modelParams: Record<string, unknown> = {
+        apiKey: modelConfig.api_key,
+        baseUrl: modelConfig.base_url,
+        model: modelId,
+        resolution: draft.resolution,
+        aspectRatio: draft.aspectRatio,
+        n: draft.imageCount,
+        response_format: 'url',
+        output_format: 'png',
+      };
+
+      if (referenceImages.length === 1) {
+        modelParams.image = referenceImages[0];
+      } else if (referenceImages.length > 1) {
+        modelParams.image = referenceImages;
+      }
+
+      const imageUrl = await aiModelService.invokeImageModel({
+        modelId,
+        prompt: promptText,
+        modelParams,
+      });
+
+      await ensurePreviewLoadingVisible();
+      setCanvasNodes((previousNodes) =>
+        previousNodes.map((node) => {
+          if (!isImageGenerationWorkflowNode(node) || node.id !== nodeId) {
+            return node;
+          }
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              generationStatus: 'ready',
+              generationErrorMessage: undefined,
+              generatedMedia: {
+                kind: 'image',
+                url: imageUrl,
+                mimeType: 'image/png',
+                name: `${modelId}-generated.png`,
+                storageProvider: imageUrl.startsWith('data:') ? 'base64' : 'qiniu',
+              },
+            },
+          };
+        }),
+      );
+    } catch (error) {
+      await ensurePreviewLoadingVisible();
+      const errorMessage = error instanceof Error ? error.message : '图片生成失败，请稍后重试';
+      setCanvasNodes((previousNodes) =>
+        previousNodes.map((node) => {
+          if (!isImageGenerationWorkflowNode(node) || node.id !== nodeId) {
+            return node;
+          }
+
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              generationStatus: 'error',
+              generationErrorMessage: errorMessage,
+            },
+          };
+        }),
+      );
+    }
   }, []);
 
   /**
@@ -1108,6 +1332,60 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     );
   }, []);
 
+  const handleUpdateImageAspectRatio = useCallback((nodeId: string, nextAspectRatio: ImageGenerationPromptDraft['aspectRatio']) => {
+    setCanvasNodes((previousNodes) =>
+      previousNodes.map((node) => {
+        if (node.id !== nodeId || node.type !== IMAGE_GENERATION_NODE_TYPE) {
+          return node;
+        }
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            aspectRatio: nextAspectRatio,
+          },
+        };
+      }),
+    );
+  }, []);
+
+  const handleUpdateImageResolution = useCallback((nodeId: string, nextResolution: ImageGenerationPromptDraft['resolution']) => {
+    setCanvasNodes((previousNodes) =>
+      previousNodes.map((node) => {
+        if (node.id !== nodeId || node.type !== IMAGE_GENERATION_NODE_TYPE) {
+          return node;
+        }
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            resolution: nextResolution,
+          },
+        };
+      }),
+    );
+  }, []);
+
+  const handleUpdateImageCount = useCallback((nodeId: string, nextImageCount: number) => {
+    setCanvasNodes((previousNodes) =>
+      previousNodes.map((node) => {
+        if (node.id !== nodeId || node.type !== IMAGE_GENERATION_NODE_TYPE) {
+          return node;
+        }
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            imageCount: nextImageCount,
+          },
+        };
+      }),
+    );
+  }, []);
+
   /**
    * 工具栏触发“替换上传”入口
    *
@@ -1166,6 +1444,14 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   useEffect(() => {
     canvasNodesRef.current = canvasNodes;
   }, [canvasNodes]);
+
+  useEffect(() => {
+    canvasEdgesRef.current = canvasEdges;
+  }, [canvasEdges]);
+
+  useEffect(() => {
+    imageModelConfigsRef.current = imageModelConfigs;
+  }, [imageModelConfigs]);
 
   /**
    * 页面卸载时统一清理所有预览 URL，避免内存泄漏。
@@ -1240,9 +1526,13 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       data: {
         title: '生成图片',
         promptText: '',
-        modelName: 'qwen-image-edit',
+        modelName: '', // 空字符串，让组件自动选择第一个可用模型
         aspectRatio: '1:1',
-        resolution: '1K',
+        resolution: '2K',
+        imageCount: 1,
+        generationStatus: 'idle',
+        generationErrorMessage: undefined,
+        generatedMedia: undefined,
         cardWidth: DEFAULT_IMAGE_NODE_CARD_WIDTH,
         expandedHeight: DEFAULT_IMAGE_NODE_EXPANDED_HEIGHT,
         collapsedHeight: DEFAULT_IMAGE_NODE_COLLAPSED_HEIGHT,
@@ -1251,6 +1541,9 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
         onRequestGenerateImage: handleRequestGenerateImage,
         onRequestUpdatePromptText: handleUpdateImagePromptText,
         onRequestUpdateModelName: handleUpdateImageModelName,
+        onRequestUpdateAspectRatio: handleUpdateImageAspectRatio,
+        onRequestUpdateResolution: handleUpdateImageResolution,
+        onRequestUpdateImageCount: handleUpdateImageCount,
       },
     };
 
@@ -1266,6 +1559,9 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     handleRequestGenerateImage,
     handleUpdateImagePromptText,
     handleUpdateImageModelName,
+    handleUpdateImageAspectRatio,
+    handleUpdateImageResolution,
+    handleUpdateImageCount,
   ]);
 
   /**
@@ -1405,37 +1701,14 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   const [isApiSettingsModalOpen, setIsApiSettingsModalOpen] = useState(false);
 
   /**
-   * API 配置数据管理 Hook
+   * API 配置数据管理
    *
-   * 【职责说明】
-   * 此 Hook 负责管理所有 API 配置相关的数据和操作。
-   *
-   * 【当前工作模式】
-   * - 当前使用 Mock 数据（useMockData: true）
-   * - 后端对接时，将 useMockData 改为 false 即可切换为真实模式
-   *
-   * 【返回数据说明】
-   * - configs: API 配置列表
-   * - loading: 是否正在加载
-   * - testConnection: 测试连接的函数
-   * - saveConfig: 保存配置的函数
-   * - deleteConfig: 删除配置的函数
-   *
-   * 【后续对接说明】
-   * 后端对接时，Hook 内部会调用：
-   * 1. 应用层服务（ApiConfigApplicationService）
-   * 2. 仓库实现（TauriApiConfigRepo）
-   * 3. Tauri 命令（Rust 后端）
-   *
-   * 详细对接步骤请查看：
-   * src/presentation/hooks/useApiConfigs.ts 文件顶部的注释说明
+   * 【已移除】
+   * - 原 useApiConfigs Hook 已被移除
+   * - API 配置现在通过 ApiSettingsModal 内部的 ModelConfigPanel 管理
+   * - 数据来自 SQLite，通过 Tauri Commands 获取
+   * - 详见：src/presentation/components/ModelConfigPanel.tsx
    */
-  const {
-    configs,
-    loading,
-    testConnection,
-    deleteConfig,
-  } = useApiConfigs(true); // true = 使用 Mock 数据，后端对接时改为 false
 
   /**
    * 存储管理数据 Hook
@@ -1679,8 +1952,11 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
             onClick={() => router.push('/projects')}
             className="flex shrink-0 items-center space-x-2 bg-[#1a1a1a] px-3 py-1.5 rounded-full border border-white/5 pointer-events-auto cursor-pointer hover:bg-[#252525] transition-colors shadow-lg"
           >
-            <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(59,130,246,0.5)]">
-              <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+            <div className="w-6 h-6 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
             </div>
             <span className="text-xs font-medium text-white truncate max-w-[150px]">
               {project ? project.meta.name : '未命名项目'}
@@ -1925,10 +2201,6 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       <ApiSettingsModal
         isOpen={isApiSettingsModalOpen}
         onClose={() => setIsApiSettingsModalOpen(false)}
-        configs={configs}
-        loading={loading}
-        onTestConnection={testConnection}
-        onDeleteConfig={deleteConfig}
       />
 
     </div>

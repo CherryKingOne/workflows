@@ -14,17 +14,101 @@ import {
   type ImageGenerationPromptDraft,
   type ImageGenerationResolution,
   type ImageGenerationWorkflowNode,
-  IMAGE_MODEL_OPTIONS,
-  getImageModelOption,
 } from './types';
+import { useModelConfig } from '@/src/presentation/hooks/useModelConfig';
+import { aiModelService, type ImageModelParamRecommendations } from '@/src/application/aiModel/AiModelApplicationService';
 
-const DEFAULT_CARD_WIDTH = 400;
-const MIN_CARD_WIDTH = 340;
-const MAX_CARD_WIDTH = 480;
+const DEFAULT_CARD_WIDTH = 580;
+const MIN_CARD_WIDTH = 540;
+const MAX_CARD_WIDTH = 720;
 const DEFAULT_EXPANDED_HEIGHT = 380;
 const DEFAULT_COLLAPSED_HEIGHT = 88;
 const COLLAPSED_PROMPT_PANEL_HEIGHT = 180;
 const COLLAPSED_PROMPT_PANEL_GAP = 8;
+const TOOLBAR_SELECT_WRAPPER_CLASS = "nodrag relative";
+const TOOLBAR_SELECT_CLASS = "nodrag h-9 min-w-[92px] appearance-none rounded-lg border border-white/10 bg-[#121214] px-4 pr-8 text-sm text-neutral-200 outline-none transition-colors hover:bg-[#1a1a1c] hover:text-white";
+const DEFAULT_IMAGE_COUNT_MIN = 1;
+const DEFAULT_IMAGE_COUNT_MAX = 1;
+const DEFAULT_IMAGE_COUNT = 1;
+
+const IMAGE_RESOLUTION_VALUES: ImageGenerationResolution[] = ['2K', '3K'];
+const IMAGE_ASPECT_RATIO_VALUES: ImageGenerationAspectRatio[] = ['1:1', '3:4', '4:3', '16:9', '9:16', '3:2', '2:3', '21:9'];
+
+function isImageResolution(value: string): value is ImageGenerationResolution {
+  return IMAGE_RESOLUTION_VALUES.includes(value as ImageGenerationResolution);
+}
+
+function isImageAspectRatio(value: string): value is ImageGenerationAspectRatio {
+  return IMAGE_ASPECT_RATIO_VALUES.includes(value as ImageGenerationAspectRatio);
+}
+
+function clampImageCount(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function getResolutionOptions(
+  recommendations: ImageModelParamRecommendations | null,
+): Array<{ value: ImageGenerationResolution; label: string }> {
+  const recommended = recommendations?.resolution
+    ?.filter(option => option.supported !== false && isImageResolution(option.value))
+    .map(option => ({
+      value: option.value as ImageGenerationResolution,
+      label: option.value.toLowerCase(),
+    }));
+
+  if (recommended && recommended.length > 0) {
+    return recommended;
+  }
+
+  return [{ value: '2K', label: '2k' }];
+}
+
+function getAspectRatioOptions(
+  recommendations: ImageModelParamRecommendations | null,
+  resolution: ImageGenerationResolution,
+): Array<{ value: ImageGenerationAspectRatio; label: string }> {
+  const recommended = recommendations?.aspectRatio?.[resolution]
+    ?.filter(option => option.supported !== false && isImageAspectRatio(option.value))
+    .map(option => {
+      const ratio = option.value as ImageGenerationAspectRatio;
+      return {
+        value: ratio,
+        label: ratio,
+      };
+    });
+
+  if (recommended && recommended.length > 0) {
+    return recommended;
+  }
+
+  return IMAGE_ASPECT_RATIO_VALUES.map(value => ({ value, label: value }));
+}
+
+function getImageCountRange(recommendations: ImageModelParamRecommendations | null): {
+  min: number;
+  max: number;
+  defaultValue: number;
+} {
+  const recommendedMin = recommendations?.n?.min;
+  const recommendedMax = recommendations?.n?.max;
+  const recommendedDefault = recommendations?.n?.default;
+
+  const min = Number.isInteger(recommendedMin)
+    ? Number(recommendedMin)
+    : DEFAULT_IMAGE_COUNT_MIN;
+  const max = Number.isInteger(recommendedMax)
+    ? Number(recommendedMax)
+    : DEFAULT_IMAGE_COUNT_MAX;
+  const defaultValue = Number.isInteger(recommendedDefault)
+    ? Number(recommendedDefault)
+    : DEFAULT_IMAGE_COUNT;
+
+  return {
+    min,
+    max,
+    defaultValue: clampImageCount(defaultValue, min, max),
+  };
+}
 
 /**
  * 图片生成节点卡片（React Flow 自定义节点）
@@ -41,6 +125,9 @@ const COLLAPSED_PROMPT_PANEL_GAP = 8;
 export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageGenerationWorkflowNode>) {
   const updateNodeInternals = useUpdateNodeInternals();
 
+  // 获取 Image 类型的模型配置列表
+  const { configs: imageModelConfigs } = useModelConfig('image');
+
   /**
    * 原型里卡片有 4 个视觉状态：
    * 1. 展开态（默认）
@@ -50,7 +137,7 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
    *
    * 当前实现策略：
    * - 用 `isCollapsed` 控制 1/3
-   * - 用 `selected` 控制“是否激活”
+   * - 用 `selected` 控制”是否激活”
    *
    * 你这次需求明确要求：
    * - 未点击卡片（未激活）时，不显示左右连接点
@@ -59,10 +146,91 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
   const [isCollapsed, setIsCollapsed] = useState(Boolean(data.isCollapsed));
   const [hovered, setHovered] = useState(false);
   const [promptText, setPromptText] = useState(data.promptText ?? '');
-  const [modelName, setModelName] = useState(data.modelName ?? 'qwen-image-edit');
+
+  /**
+   * 将后端模型配置转换为下拉选项格式
+   */
+  const imageModelOptions = useMemo(() => {
+    return imageModelConfigs.map(config => ({
+      value: config.model_id,
+      label: config.model_name,
+      description: undefined, // 不显示描述
+      isConfigured: config.enabled && Boolean(config.api_key),
+    }));
+  }, [imageModelConfigs]);
+
+  /**
+   * 计算有效的模型名称
+   * 优先级：data.modelName > 第一个可用模型 > 空字符串
+   */
+  const effectiveModelName = useMemo(() => {
+    if (data.modelName) {
+      return data.modelName;
+    }
+    return imageModelConfigs.length > 0 ? imageModelConfigs[0].model_id : '';
+  }, [data.modelName, imageModelConfigs]);
+
+  const [modelName, setModelName] = useState(effectiveModelName);
   const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
-  const [aspectRatio] = useState<ImageGenerationAspectRatio>(data.aspectRatio ?? '1:1');
-  const [resolution] = useState<ImageGenerationResolution>(data.resolution ?? '1K');
+  const [aspectRatio, setAspectRatio] = useState<ImageGenerationAspectRatio>(data.aspectRatio ?? '1:1');
+  const [resolution, setResolution] = useState<ImageGenerationResolution>(data.resolution ?? '2K');
+  const [imageCount, setImageCount] = useState<number>(data.imageCount ?? DEFAULT_IMAGE_COUNT);
+
+  /**
+   * 当有效模型名称变化且当前模型名为空时，更新为有效模型名
+   * 这样可以在模型列表加载后自动设置默认模型
+   */
+  const currentModelName = modelName || effectiveModelName;
+
+  const modelParamRecommendations = useMemo(() => {
+    if (!currentModelName) {
+      return null;
+    }
+    return aiModelService.getImageModelParamRecommendations(currentModelName);
+  }, [currentModelName]);
+
+  const resolutionOptions = useMemo<Array<{ value: ImageGenerationResolution; label: string }>>(
+    () => getResolutionOptions(modelParamRecommendations),
+    [modelParamRecommendations],
+  );
+  const selectedResolution = useMemo<ImageGenerationResolution>(
+    () => resolutionOptions.find(option => option.value === resolution)?.value ?? resolutionOptions[0].value,
+    [resolution, resolutionOptions],
+  );
+
+  const aspectRatioOptions = useMemo<Array<{ value: ImageGenerationAspectRatio; label: string }>>(
+    () => getAspectRatioOptions(modelParamRecommendations, selectedResolution),
+    [modelParamRecommendations, selectedResolution],
+  );
+  const selectedAspectRatio = useMemo<ImageGenerationAspectRatio>(
+    () => aspectRatioOptions.find(option => option.value === aspectRatio)?.value ?? aspectRatioOptions[0].value,
+    [aspectRatio, aspectRatioOptions],
+  );
+
+  const imageCountRange = useMemo(
+    () => getImageCountRange(modelParamRecommendations),
+    [modelParamRecommendations],
+  );
+
+  const imageCountOptions = useMemo<number[]>(() => {
+    const values: number[] = [];
+    for (let count = imageCountRange.min; count <= imageCountRange.max; count += 1) {
+      values.push(count);
+    }
+    return values;
+  }, [imageCountRange.max, imageCountRange.min]);
+  const selectedImageCount = useMemo<number>(
+    () => (imageCountOptions.includes(imageCount) ? imageCount : imageCountRange.defaultValue),
+    [imageCount, imageCountOptions, imageCountRange.defaultValue],
+  );
+
+  /**
+   * 根据模型 ID 获取模型展示信息
+   */
+  const getImageModelOption = (modelId: string) => {
+    const option = imageModelOptions.find(opt => opt.value === modelId);
+    return option ?? { value: modelId, label: modelId, isConfigured: false };
+  };
 
   /**
    * 节点宽度兜底与钳制
@@ -174,9 +342,10 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
   const handleGenerateImage = () => {
     const promptDraft: ImageGenerationPromptDraft = {
       promptText,
-      modelName,
-      aspectRatio,
-      resolution,
+      modelName: currentModelName,
+      aspectRatio: selectedAspectRatio,
+      resolution: selectedResolution,
+      imageCount: selectedImageCount,
     };
 
     if (data.onRequestGenerateImage) {
@@ -227,9 +396,56 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
    * - 上层可选择是否持久化到全局状态
    */
   const handleSelectModel = (modelId: string) => {
+    const nextRecommendations = aiModelService.getImageModelParamRecommendations(modelId);
+    const nextResolutionOptions = getResolutionOptions(nextRecommendations);
+    const nextResolution = nextResolutionOptions[0].value;
+    const nextAspectRatioOptions = getAspectRatioOptions(nextRecommendations, nextResolution);
+    const nextAspectRatio = nextAspectRatioOptions[0].value;
+    const nextImageCountRange = getImageCountRange(nextRecommendations);
+    const nextImageCount = nextImageCountRange.defaultValue;
+
     setModelName(modelId);
+    setResolution(nextResolution);
+    setAspectRatio(nextAspectRatio);
+    setImageCount(nextImageCount);
     setIsModelDropdownOpen(false);
     data.onRequestUpdateModelName?.(id, modelId);
+    data.onRequestUpdateResolution?.(id, nextResolution);
+    data.onRequestUpdateAspectRatio?.(id, nextAspectRatio);
+    data.onRequestUpdateImageCount?.(id, nextImageCount);
+  };
+
+  const handleAspectRatioChange = (nextAspectRatio: string) => {
+    if (!isImageAspectRatio(nextAspectRatio)) {
+      return;
+    }
+    setAspectRatio(nextAspectRatio);
+    data.onRequestUpdateAspectRatio?.(id, nextAspectRatio);
+  };
+
+  const handleResolutionChange = (nextResolution: string) => {
+    if (!isImageResolution(nextResolution)) {
+      return;
+    }
+
+    const nextAspectRatioOptions = getAspectRatioOptions(modelParamRecommendations, nextResolution);
+    const nextAspectRatio = nextAspectRatioOptions.find(option => option.value === selectedAspectRatio)?.value
+      ?? nextAspectRatioOptions[0].value;
+
+    setResolution(nextResolution);
+    setAspectRatio(nextAspectRatio);
+    data.onRequestUpdateResolution?.(id, nextResolution);
+    data.onRequestUpdateAspectRatio?.(id, nextAspectRatio);
+  };
+
+  const handleImageCountChange = (nextImageCount: string) => {
+    const parsedCount = Number.parseInt(nextImageCount, 10);
+    if (!Number.isInteger(parsedCount)) {
+      return;
+    }
+    const clampedCount = clampImageCount(parsedCount, imageCountRange.min, imageCountRange.max);
+    setImageCount(clampedCount);
+    data.onRequestUpdateImageCount?.(id, clampedCount);
   };
 
   return (
@@ -321,7 +537,16 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
               : '0 12px 32px rgba(0,0,0,0.45)',
           }}
         >
-          <div className="pt-6 pl-4 text-xl font-light tracking-wide text-neutral-400">输入提示词...</div>
+          <div className="flex-1 pb-4">
+            <div className="flex h-full min-h-[170px] rounded-xl border border-white/10 bg-[#161619] p-4">
+              <textarea
+                className="nodrag nowheel h-full w-full resize-none border-none bg-transparent text-lg font-light tracking-wide text-neutral-300 outline-none placeholder:text-neutral-500"
+                value={promptText}
+                onChange={handlePromptTextChange}
+                placeholder="输入提示词..."
+              />
+            </div>
+          </div>
 
           <div className="flex items-center gap-3">
             {/* 模型选择下拉列表 */}
@@ -333,7 +558,7 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
                 aria-haspopup="listbox"
                 aria-expanded={isModelDropdownOpen}
               >
-                <span className="truncate">{getImageModelOption(modelName).label}</span>
+                <span className="truncate">{getImageModelOption(currentModelName).label}</span>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   width="12"
@@ -356,8 +581,8 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
                   className="nodrag absolute left-0 top-full z-50 mt-2 w-[280px] rounded-xl border border-white/10 bg-[#0f0f10] p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.6)] backdrop-blur-md"
                   role="listbox"
                 >
-                  {IMAGE_MODEL_OPTIONS.map((option) => {
-                    const isSelected = modelName === option.value;
+                  {imageModelOptions.map((option) => {
+                    const isSelected = currentModelName === option.value;
                     const isConfigured = option.isConfigured !== false;
 
                     return (
@@ -413,12 +638,93 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
                 </div>
               )}
             </div>
-            <button type="button" className="nodrag rounded-lg border border-white/10 bg-[#18181b] px-4 py-2 text-sm text-neutral-300">
-              {aspectRatio}
-            </button>
-            <button type="button" className="nodrag rounded-lg border border-white/10 bg-[#18181b] px-4 py-2 text-sm text-neutral-300">
-              {resolution}
-            </button>
+            <div className={TOOLBAR_SELECT_WRAPPER_CLASS}>
+              <label className="nodrag sr-only" htmlFor={`${id}-aspect-ratio-select-expanded`}>宽高比</label>
+              <select
+                id={`${id}-aspect-ratio-select-expanded`}
+                className={TOOLBAR_SELECT_CLASS}
+                value={selectedAspectRatio}
+                onChange={(event) => handleAspectRatioChange(event.currentTarget.value)}
+              >
+                {aspectRatioOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </div>
+            <div className={TOOLBAR_SELECT_WRAPPER_CLASS}>
+              <label className="nodrag sr-only" htmlFor={`${id}-resolution-select-expanded`}>分辨率</label>
+              <select
+                id={`${id}-resolution-select-expanded`}
+                className={TOOLBAR_SELECT_CLASS}
+                value={selectedResolution}
+                onChange={(event) => handleResolutionChange(event.currentTarget.value)}
+              >
+                {resolutionOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </div>
+            <div className={TOOLBAR_SELECT_WRAPPER_CLASS}>
+              <label className="nodrag sr-only" htmlFor={`${id}-image-count-select-expanded`}>生图数量</label>
+              <select
+                id={`${id}-image-count-select-expanded`}
+                className={TOOLBAR_SELECT_CLASS}
+                value={selectedImageCount}
+                onChange={(event) => handleImageCountChange(event.currentTarget.value)}
+              >
+                {imageCountOptions.map((count) => (
+                  <option key={count} value={count}>
+                    {`${count}张`}
+                  </option>
+                ))}
+              </select>
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </div>
             <button
               type="button"
               onClick={handleGenerateImage}
@@ -463,7 +769,7 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
                   aria-haspopup="listbox"
                   aria-expanded={isModelDropdownOpen}
                 >
-                  <span className="truncate">{getImageModelOption(modelName).label}</span>
+                  <span className="truncate">{getImageModelOption(currentModelName).label}</span>
                   <svg
                     xmlns="http://www.w3.org/2000/svg"
                     width="12"
@@ -486,8 +792,8 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
                     className="nodrag absolute left-0 top-full z-50 mt-2 w-[280px] rounded-xl border border-white/10 bg-[#0f0f10] p-1.5 shadow-[0_8px_30px_rgba(0,0,0,0.6)] backdrop-blur-md"
                     role="listbox"
                   >
-                    {IMAGE_MODEL_OPTIONS.map((option) => {
-                      const isSelected = modelName === option.value;
+                    {imageModelOptions.map((option) => {
+                      const isSelected = currentModelName === option.value;
                       const isConfigured = option.isConfigured !== false;
 
                       return (
@@ -543,12 +849,93 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
                   </div>
                 )}
               </div>
-              <button type="button" className="nodrag rounded-lg border border-white/10 bg-[#18181b] px-4 py-2 text-sm text-neutral-300">
-                {aspectRatio}
-              </button>
-              <button type="button" className="nodrag rounded-lg border border-white/10 bg-[#18181b] px-4 py-2 text-sm text-neutral-300">
-                {resolution}
-              </button>
+              <div className={TOOLBAR_SELECT_WRAPPER_CLASS}>
+                <label className="nodrag sr-only" htmlFor={`${id}-aspect-ratio-select-collapsed`}>宽高比</label>
+                <select
+                  id={`${id}-aspect-ratio-select-collapsed`}
+                  className={TOOLBAR_SELECT_CLASS}
+                  value={selectedAspectRatio}
+                  onChange={(event) => handleAspectRatioChange(event.currentTarget.value)}
+                >
+                  {aspectRatioOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
+              <div className={TOOLBAR_SELECT_WRAPPER_CLASS}>
+                <label className="nodrag sr-only" htmlFor={`${id}-resolution-select-collapsed`}>分辨率</label>
+                <select
+                  id={`${id}-resolution-select-collapsed`}
+                  className={TOOLBAR_SELECT_CLASS}
+                  value={selectedResolution}
+                  onChange={(event) => handleResolutionChange(event.currentTarget.value)}
+                >
+                  {resolutionOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
+              <div className={TOOLBAR_SELECT_WRAPPER_CLASS}>
+                <label className="nodrag sr-only" htmlFor={`${id}-image-count-select-collapsed`}>生图数量</label>
+                <select
+                  id={`${id}-image-count-select-collapsed`}
+                  className={TOOLBAR_SELECT_CLASS}
+                  value={selectedImageCount}
+                  onChange={(event) => handleImageCountChange(event.currentTarget.value)}
+                >
+                  {imageCountOptions.map((count) => (
+                    <option key={count} value={count}>
+                      {`${count}张`}
+                    </option>
+                  ))}
+                </select>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400"
+                >
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
               <button
                 type="button"
                 onClick={handleGenerateImage}
@@ -586,7 +973,7 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
 
           {showCollapsedPromptPanel && (
             <div className="h-[180px] rounded-2xl border border-white/10 bg-[#18181b] p-2 shadow-xl">
-              <div className="flex h-full rounded-xl border border-blue-900/50 bg-[#161619] p-4 ring-1 ring-blue-500/20">
+              <div className="flex h-full rounded-xl border border-white/10 bg-[#161619] p-4">
                 <textarea
                   className="nodrag nowheel h-full w-full resize-none border-none bg-transparent text-lg font-light tracking-wide text-neutral-300 outline-none placeholder:text-neutral-500"
                   value={promptText}
