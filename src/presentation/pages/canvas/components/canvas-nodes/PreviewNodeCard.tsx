@@ -5,6 +5,7 @@ import {
   Handle,
   type NodeProps,
   Position,
+  useConnection,
   useNodeConnections,
   useUpdateNodeInternals,
 } from '@xyflow/react';
@@ -108,6 +109,34 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
    * - 输出点仍保持“仅激活态显示”。
    */
   const shouldShowInputHandle = isNodeActive || hasIncomingSourceOnInputHandle;
+  const connectionPreview = useConnection((connection) => {
+    if (!connection.inProgress || !connection.fromNode) {
+      return {
+        inProgress: false,
+        fromNodeId: null as string | null,
+        toNodeId: null as string | null,
+        toHandleId: null as string | null,
+      };
+    }
+
+    return {
+      inProgress: true,
+      fromNodeId: connection.fromNode.id,
+      toNodeId: connection.toNode?.id ?? null,
+      toHandleId: connection.toHandle?.id ?? null,
+    };
+  });
+  const showConnectionMergeGlow = useMemo(() => {
+    if (!connectionPreview.inProgress) {
+      return false;
+    }
+
+    if (connectionPreview.fromNodeId === id) {
+      return false;
+    }
+
+    return connectionPreview.toNodeId === id && connectionPreview.toHandleId === 'input';
+  }, [connectionPreview.fromNodeId, connectionPreview.inProgress, connectionPreview.toHandleId, connectionPreview.toNodeId, id]);
   /**
    * 当节点尺寸或选中态变化时，刷新 React Flow 内部几何缓存。
    *
@@ -139,6 +168,7 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
   const isImagePreview = shouldRenderPreviewMedia && previewMedia?.kind === 'image';
   const isVideoPreview = shouldRenderPreviewMedia && previewMedia?.kind === 'video';
   const isAudioPreview = shouldRenderPreviewMedia && previewMedia?.kind === 'audio';
+  const shouldRenderEmptyState = !shouldRenderPreviewMedia && !isPreviewLoading;
 
   return (
     <div
@@ -206,6 +236,13 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
         }}
       />
 
+      {showConnectionMergeGlow && (
+        <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden rounded-[14px]">
+          <div className="preview-node-source-glint preview-node-source-glint-top" />
+          <div className="preview-node-source-glint preview-node-source-glint-bottom" />
+        </div>
+      )}
+
       {hovered && (
         <button
           type="button"
@@ -226,53 +263,61 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
           boxShadow: isNodeActive ? '0 0 12px rgba(255, 255, 255, 0.1)' : 'none',
         }}
       >
-        {shouldRenderPreviewMedia && previewMedia ? (
-          <>
-            {isImagePreview && (
-              <img
-                src={previewMedia.url}
-                alt={previewMedia.name ?? '预览图片'}
-                className="h-full w-full rounded-[12px] object-contain"
-              />
-            )}
+        <div className="relative z-10 flex h-full w-full flex-col items-center justify-center text-center">
+          {shouldRenderPreviewMedia && previewMedia ? (
+            <>
+              {isImagePreview && (
+                <img
+                  src={previewMedia.url}
+                  alt={previewMedia.name ?? '预览图片'}
+                  className="h-full w-full rounded-[12px] object-contain"
+                />
+              )}
 
-            {isVideoPreview && (
-              <video
-                src={previewMedia.url}
-                controls
-                className="h-full w-full rounded-[12px] bg-black object-contain"
-              />
-            )}
+              {isVideoPreview && (
+                <video
+                  src={previewMedia.url}
+                  controls
+                  className="h-full w-full rounded-[12px] bg-black object-contain"
+                />
+              )}
 
-            {isAudioPreview && (
-              <div className="w-full max-w-[360px] rounded-xl border border-white/10 bg-black/35 p-3">
-                <p className="mb-2 truncate text-[12px] text-[#9a9a9c]">
-                  {previewMedia.name ?? '音频预览'}
-                </p>
-                <audio src={previewMedia.url} controls className="w-full" />
-              </div>
-            )}
-          </>
-        ) : (
-          <>
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" className="mb-4">
-              <path
-                d="M12 5C7 5 2.73 8.11 1 12C2.73 15.89 7 19 12 19C17 19 21.27 15.89 23 12C21.27 8.11 17 5 12 5Z"
-                stroke="#4a4a4c"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-              <circle cx="12" cy="12" r="3.5" stroke="#4a4a4c" strokeWidth="2" />
-              <circle cx="12" cy="12" r="1.5" fill="#4a4a4c" />
-            </svg>
+              {isAudioPreview && (
+                <div className="w-full max-w-[360px] rounded-xl border border-white/10 bg-black/35 p-3">
+                  <p className="mb-2 truncate text-[12px] text-[#9a9a9c]">
+                    {previewMedia.name ?? '音频预览'}
+                  </p>
+                  <audio src={previewMedia.url} controls className="w-full" />
+                </div>
+              )}
+            </>
+          ) : shouldRenderEmptyState ? (
+            <>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" className="mb-4">
+                <path
+                  d="M12 5C7 5 2.73 8.11 1 12C2.73 15.89 7 19 12 19C17 19 21.27 15.89 23 12C21.27 8.11 17 5 12 5Z"
+                  stroke="#4a4a4c"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+                <circle cx="12" cy="12" r="3.5" stroke="#4a4a4c" strokeWidth="2" />
+                <circle cx="12" cy="12" r="1.5" fill="#4a4a4c" />
+              </svg>
 
-            <p className="text-[15px] tracking-wide text-[#999999]">{data.primaryHintText}</p>
-            <p className="mt-3 text-[13px] tracking-wide text-[#666666]">{data.secondaryHintText}</p>
-          </>
-        )}
+              <p className="text-[15px] tracking-wide text-[#999999]">{data.primaryHintText}</p>
+              <p className="mt-3 text-[13px] tracking-wide text-[#666666]">{data.secondaryHintText}</p>
+            </>
+          ) : null}
+          {/*
+            loading 且暂无可渲染媒体时，这里保持空白，由上层白色进度动画完全覆盖。
+          */}
+          {!shouldRenderPreviewMedia && isPreviewLoading ? (
+            <span className="sr-only">预览生成中</span>
+          ) : null}
+        </div>
 
         {isPreviewLoading && (
-          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[12px]">
+          <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-[12px]">
             <div className="pointer-events-none preview-node-loading-fill" />
             <div className="pointer-events-none preview-node-loading-front" />
           </div>
@@ -280,18 +325,58 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
       </div>
 
       <style jsx>{`
+        @keyframes preview-node-source-glint-slide {
+          0% {
+            transform: translateX(-52%);
+            opacity: 0.12;
+          }
+          50% {
+            opacity: 0.92;
+          }
+          100% {
+            transform: translateX(52%);
+            opacity: 0.16;
+          }
+        }
+
+        .preview-node-source-glint {
+          position: absolute;
+          left: -26%;
+          width: 152%;
+          height: 2px;
+          background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.06) 18%,
+            rgba(255, 255, 255, 0.92) 50%,
+            rgba(255, 255, 255, 0.06) 82%,
+            rgba(255, 255, 255, 0) 100%
+          );
+          filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.35));
+          animation: preview-node-source-glint-slide 1.2s ease-in-out infinite;
+        }
+
+        .preview-node-source-glint-top {
+          top: 0;
+        }
+
+        .preview-node-source-glint-bottom {
+          bottom: 0;
+          animation-delay: 0.14s;
+        }
+
         @keyframes preview-node-loading-fill {
           0% {
             transform: scaleX(0);
-            opacity: 0.18;
+            opacity: 0;
           }
           78% {
             transform: scaleX(1);
-            opacity: 0.34;
+            opacity: 0.9;
           }
           100% {
             transform: scaleX(1);
-            opacity: 0.26;
+            opacity: 0.82;
           }
         }
 
@@ -301,11 +386,11 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
             opacity: 0;
           }
           14% {
-            opacity: 0.15;
+            opacity: 0.24;
           }
           78% {
             transform: translateX(0%);
-            opacity: 0.42;
+            opacity: 1;
           }
           100% {
             transform: translateX(0%);
@@ -317,11 +402,7 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
           position: absolute;
           inset: 0;
           transform-origin: left center;
-          background: linear-gradient(
-            90deg,
-            rgba(255, 255, 255, 0.08) 0%,
-            rgba(255, 255, 255, 0.24) 100%
-          );
+          background: #ffffff;
           animation: preview-node-loading-fill 2.2s cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
         }
 
@@ -331,9 +412,10 @@ export function PreviewNodeCard({ id, data, selected }: NodeProps<PreviewWorkflo
           background: linear-gradient(
             90deg,
             rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0.38) 98%,
-            rgba(255, 255, 255, 0.12) 100%
+            rgba(255, 255, 255, 1) 98%,
+            rgba(255, 255, 255, 0.42) 100%
           );
+          filter: blur(1px);
           animation: preview-node-loading-front 2.2s cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
         }
       `}</style>

@@ -92,6 +92,10 @@ interface UploadedAssetDto {
   objectKey?: string | null;
 }
 
+interface CanvasEdgeData extends Record<string, unknown> {
+  connectedAt?: number;
+}
+
 /**
  * 节点类型守卫：是否为“上传文件节点”
  *
@@ -687,10 +691,17 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
         }
 
         const incomingEdges = edges.filter((edge) => edge.target === node.id);
+        const wasPreviewLoading = (node.data.previewStatus ?? 'empty') === 'loading';
+        const currentPreviewStatus = node.data.previewStatus ?? 'empty';
+        const currentPreviewMedia = node.data.previewMedia;
         let hasLoadingImageGenerationSource = false;
+        let hasImageGenerationSourceAwaitingNextResult = false;
         const firstRenderableMedia = incomingEdges
-          .map((edge) => nodeById.get(edge.source))
-          .map((sourceNode) => {
+          .map((edge) => ({
+            edge,
+            sourceNode: nodeById.get(edge.source),
+          }))
+          .map(({ edge, sourceNode }) => {
             if (!sourceNode) {
               return null;
             }
@@ -714,6 +725,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
                   name: firstAsset.name,
                   storageProvider: firstAsset.storageProvider,
                   objectKey: firstAsset.objectKey,
+                  sourceType: 'upload' as const,
                 };
               }
             }
@@ -723,32 +735,81 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
                 hasLoadingImageGenerationSource = true;
               }
 
-              if (sourceNode.data.generatedMedia?.url) {
+              const generatedMedia = sourceNode.data.generatedMedia;
+              if (generatedMedia?.url) {
+                const edgeConnectedAtRaw = (edge.data as CanvasEdgeData | undefined)?.connectedAt;
+                const edgeConnectedAt = typeof edgeConnectedAtRaw === 'number' ? edgeConnectedAtRaw : undefined;
+                const generatedAt = generatedMedia.generatedAt;
+                const hasGeneratedAfterConnection = edgeConnectedAt === undefined
+                  ? true
+                  : typeof generatedAt === 'number' && generatedAt >= edgeConnectedAt;
+                const shouldAllowReadyAfterLoadingTransition =
+                  wasPreviewLoading && sourceNode.data.generationStatus === 'ready';
+
+                if (!hasGeneratedAfterConnection && !shouldAllowReadyAfterLoadingTransition) {
+                  hasImageGenerationSourceAwaitingNextResult = true;
+                  return null;
+                }
+
                 return {
-                  kind: sourceNode.data.generatedMedia.kind,
-                  url: sourceNode.data.generatedMedia.url,
-                  mimeType: sourceNode.data.generatedMedia.mimeType,
-                  name: sourceNode.data.generatedMedia.name,
-                  storageProvider: sourceNode.data.generatedMedia.storageProvider,
-                  objectKey: sourceNode.data.generatedMedia.objectKey,
+                  kind: generatedMedia.kind,
+                  url: generatedMedia.url,
+                  mimeType: generatedMedia.mimeType,
+                  name: generatedMedia.name,
+                  storageProvider: generatedMedia.storageProvider,
+                  objectKey: generatedMedia.objectKey,
+                  sourceType: 'imageGeneration' as const,
                 };
               }
+
+              hasImageGenerationSourceAwaitingNextResult = true;
             }
 
             return null;
           })
           .find((media) => Boolean(media));
 
-        const hasRenderableMedia = Boolean(firstRenderableMedia?.url);
-        const nextPreviewStatus: 'empty' | 'loading' | 'ready' = hasLoadingImageGenerationSource
-          ? 'loading'
-          : hasRenderableMedia
-            ? 'ready'
+        const renderableMedia = firstRenderableMedia && firstRenderableMedia.url
+          ? firstRenderableMedia
+          : undefined;
+        const hasRenderableMedia = Boolean(renderableMedia);
+        const hasExistingPreviewSnapshot =
+          Boolean(currentPreviewMedia?.url) && currentPreviewStatus !== 'loading';
+        const shouldKeepExistingPreviewSnapshot =
+          hasExistingPreviewSnapshot
+          && renderableMedia?.sourceType === 'imageGeneration';
+
+        const nextPreviewMedia = shouldKeepExistingPreviewSnapshot
+          ? currentPreviewMedia
+          : renderableMedia
+            ? {
+                kind: renderableMedia.kind,
+                url: renderableMedia.url,
+                mimeType: renderableMedia.mimeType,
+                name: renderableMedia.name,
+                storageProvider: renderableMedia.storageProvider,
+                objectKey: renderableMedia.objectKey,
+              }
+            : undefined;
+
+        const shouldShowReady = Boolean(nextPreviewMedia?.url);
+        /**
+         * 预览状态优先级（修复“旧预览也被 loading 覆盖”的问题）：
+         * 1. 只要当前已有可渲染媒体，优先保持 ready（继续显示已有内容）；
+         * 2. 仅当“暂无可渲染媒体”且上游图片节点正在生成时，才进入 loading；
+         * 3. 其余为空态。
+         */
+        const nextPreviewStatus: 'empty' | 'loading' | 'ready' = shouldShowReady
+          ? 'ready'
+          : hasLoadingImageGenerationSource
+            ? 'loading'
             : 'empty';
-        const nextPreviewMedia = hasRenderableMedia ? firstRenderableMedia ?? undefined : undefined;
 
         const nextPreviewErrorMessage =
-          !hasLoadingImageGenerationSource && !hasRenderableMedia && incomingEdges.length > 0
+          !hasLoadingImageGenerationSource
+          && !shouldShowReady
+          && !hasImageGenerationSourceAwaitingNextResult
+          && incomingEdges.length > 0
             ? '当前连接素材不可预览，请检查上传内容'
             : undefined;
 
@@ -863,6 +924,9 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       addEdge(
         {
           ...connection,
+          data: {
+            connectedAt: Date.now(),
+          } as CanvasEdgeData,
           type: 'default',
           style: {
             stroke: '#a3a3a3',
@@ -1173,29 +1237,75 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       });
 
       await ensurePreviewLoadingVisible();
-      setCanvasNodes((previousNodes) =>
-        previousNodes.map((node) => {
+      const generatedAt = Date.now();
+      const generatedMediaPayload = {
+        kind: 'image' as const,
+        url: imageUrl,
+        mimeType: 'image/png',
+        name: `${modelId}-generated.png`,
+        generatedAt,
+        storageProvider: (imageUrl.startsWith('data:') ? 'base64' : 'qiniu') as 'base64' | 'qiniu',
+      };
+
+      setCanvasNodes((previousNodes) => {
+        const nodesWithUpdatedGenerator: CanvasWorkflowNode[] = previousNodes.map((node) => {
           if (!isImageGenerationWorkflowNode(node) || node.id !== nodeId) {
             return node;
           }
 
-          return {
+          const nextGeneratorNode: ImageGenerationWorkflowNode = {
             ...node,
             data: {
               ...node.data,
               generationStatus: 'ready',
               generationErrorMessage: undefined,
-              generatedMedia: {
-                kind: 'image',
-                url: imageUrl,
-                mimeType: 'image/png',
-                name: `${modelId}-generated.png`,
-                storageProvider: imageUrl.startsWith('data:') ? 'base64' : 'qiniu',
-              },
+              generatedMedia: generatedMediaPayload,
             },
           };
-        }),
-      );
+          return nextGeneratorNode;
+        });
+
+        return nodesWithUpdatedGenerator.map((node): CanvasWorkflowNode => {
+          if (!isPreviewWorkflowNode(node)) {
+            return node;
+          }
+
+          const hasExistingPreviewSnapshot =
+            Boolean(node.data.previewMedia?.url) && (node.data.previewStatus ?? 'empty') !== 'loading';
+          if (hasExistingPreviewSnapshot) {
+            return node;
+          }
+
+          const connectedFromCurrentGenerator = canvasEdgesRef.current
+            .filter((edge) => edge.target === node.id && edge.source === nodeId)
+            .some((edge) => {
+              const edgeConnectedAtRaw = (edge.data as CanvasEdgeData | undefined)?.connectedAt;
+              const edgeConnectedAt = typeof edgeConnectedAtRaw === 'number' ? edgeConnectedAtRaw : undefined;
+              return edgeConnectedAt === undefined || generatedAt >= edgeConnectedAt;
+            });
+
+          if (!connectedFromCurrentGenerator) {
+            return node;
+          }
+
+          const nextPreviewNode: PreviewWorkflowNode = {
+            ...node,
+            data: {
+              ...node.data,
+              previewStatus: 'ready',
+              previewMedia: {
+                kind: generatedMediaPayload.kind,
+                url: generatedMediaPayload.url,
+                mimeType: generatedMediaPayload.mimeType,
+                name: generatedMediaPayload.name,
+                storageProvider: generatedMediaPayload.storageProvider,
+              },
+              previewErrorMessage: undefined,
+            },
+          };
+          return nextPreviewNode;
+        });
+      });
     } catch (error) {
       await ensurePreviewLoadingVisible();
       const errorMessage = error instanceof Error ? error.message : '图片生成失败，请稍后重试';

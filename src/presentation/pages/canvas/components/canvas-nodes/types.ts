@@ -188,6 +188,14 @@ export interface ImageGenerationNodeData extends Record<string, unknown> {
     url: string;
     mimeType: string;
     name?: string;
+    /**
+     * 前端生成完成时间戳（毫秒）
+     *
+     * 用途：
+     * - 预览节点可据此判断“该结果是否发生在连线之后”
+     * - 避免新建预览节点连接后直接复用旧结果
+     */
+    generatedAt?: number;
     storageProvider?: 'qiniu' | 'base64';
     objectKey?: string;
   };
