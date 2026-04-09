@@ -37,7 +37,6 @@ export function ProjectList() {
   // 控制新建项目弹窗是否可见
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
-  const [newProjectDesc, setNewProjectDesc] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
   // ==========================================
@@ -48,7 +47,6 @@ export function ProjectList() {
   // 当前正在被编辑的项目实体，用于回显和提交时使用其 ID
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [editProjectName, setEditProjectName] = useState('');
-  const [editProjectDesc, setEditProjectDesc] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
   // ==========================================
@@ -83,10 +81,9 @@ export function ProjectList() {
     
     setIsCreating(true);
     try {
-      await createProject(newProjectName.trim(), newProjectDesc.trim() || '新项目描述');
+      await createProject(newProjectName.trim(), '');
       setIsCreateModalOpen(false);
       setNewProjectName('');
-      setNewProjectDesc('');
     } catch (err) {
       console.error(err);
     } finally {
@@ -100,7 +97,6 @@ export function ProjectList() {
   const openEditModal = (project: Project) => {
     setEditingProject(project);
     setEditProjectName(project.meta.name);
-    setEditProjectDesc(project.meta.description);
     setIsEditModalOpen(true);
   };
 
@@ -113,7 +109,7 @@ export function ProjectList() {
     
     setIsEditing(true);
     try {
-      await updateProject(editingProject.id.value, editProjectName.trim(), editProjectDesc.trim());
+      await updateProject(editingProject.id.value, editProjectName.trim(), '');
       setIsEditModalOpen(false);
       setEditingProject(null);
     } catch (err) {
@@ -236,12 +232,6 @@ export function ProjectList() {
             autoFocus
             required
           />
-          <Input 
-            label="项目描述（可选）" 
-            placeholder="简要描述一下这个项目"
-            value={newProjectDesc}
-            onChange={(e) => setNewProjectDesc(e.target.value)}
-          />
           <div className="flex justify-end gap-3 mt-4">
             <Button 
               type="button" 
@@ -276,12 +266,6 @@ export function ProjectList() {
             onChange={(e) => setEditProjectName(e.target.value)}
             autoFocus
             required
-          />
-          <Input 
-            label="项目描述（可选）" 
-            placeholder="简要描述一下这个项目"
-            value={editProjectDesc}
-            onChange={(e) => setEditProjectDesc(e.target.value)}
           />
           <div className="flex justify-end gap-3 mt-4">
             <Button 
