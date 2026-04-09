@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { useModelConfig } from '@/src/presentation/hooks/useModelConfig';
-import { ModelConfigInitializer } from '@/src/application/aiModel/ModelConfigInitializer';
 
 interface ApiSettingsModalProps {
   isOpen: boolean;
@@ -50,13 +49,6 @@ export function ApiSettingsModal({ isOpen, onClose }: ApiSettingsModalProps) {
 
   // 测试结果自动清除定时器
   const autoClearTimersRef = useRef<Record<string, NodeJS.Timeout>>({});
-
-  // 初始化配置
-  useEffect(() => {
-    if (isOpen) {
-      ModelConfigInitializer.initialize().catch(console.error);
-    }
-  }, [isOpen]);
 
   // 组件卸载时清理所有自动清除定时器
   useEffect(() => {
