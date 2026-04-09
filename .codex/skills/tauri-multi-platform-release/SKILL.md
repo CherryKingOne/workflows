@@ -25,6 +25,9 @@ on:
     tags:
       - 'v*.*.*'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -32,18 +35,25 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
+          cache: 'npm'
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
       - run: npm run build
       - run: npm run tauri build -- --target x86_64-apple-darwin
+        env:
+          RUST_BACKTRACE: 1
       - run: npm run tauri build -- --target aarch64-apple-darwin
+        env:
+          RUST_BACKTRACE: 1
+      - run: find src-tauri/target/release/bundle -type f
       - uses: actions/upload-artifact@v4
         with:
           name: macos-builds
           path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: warn
 
   build-windows:
     runs-on: windows-latest
@@ -51,17 +61,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
+          cache: 'npm'
       - uses: dtolnay/rust-toolchain@stable
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
       - run: npm run build
       - run: npm run tauri build
+        env:
+          RUST_BACKTRACE: 1
       - uses: actions/upload-artifact@v4
         with:
           name: windows-builds
           path: |
             src-tauri/target/release/bundle/msi/*.msi
             src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: warn
 
   build-linux:
     runs-on: ubuntu-22.04
@@ -69,20 +83,24 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
+          cache: 'npm'
       - uses: dtolnay/rust-toolchain@stable
       - run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
-      - run: npm ci
+      - run: npm ci --legacy-peer-deps
       - run: npm run build
       - run: npm run tauri build
+        env:
+          RUST_BACKTRACE: 1
       - uses: actions/upload-artifact@v4
         with:
           name: linux-builds
           path: |
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: warn
 
   create-release:
     needs: [build-macos, build-windows, build-linux]
@@ -458,6 +476,142 @@ project/
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
 - [Semantic Versioning](https://semver.org/)
 - [Tauri Updater Plugin](https://tauri.app/v2/guides/distribute/updater/)
+
+## Important Updates and Fixes
+
+### Node.js Version Update (2026-04-09)
+
+GitHub Actions deprecated Node.js 20. **Always use Node.js 24**:
+
+```yaml
+- uses: actions/setup-node@v4
+  with:
+    node-version: '24'
+    cache: 'npm'
+```
+
+Add environment variable to force Node.js 24:
+```yaml
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+```
+
+### Dependency Installation Issues
+
+If `npm ci` fails with peer dependency errors, use:
+```yaml
+- run: npm ci --legacy-peer-deps
+```
+
+### Build Debugging
+
+Enable Rust backtrace for better error messages:
+```yaml
+- run: npm run tauri build
+  env:
+    RUST_BACKTRACE: 1
+```
+
+### Artifact Verification
+
+Always add steps to verify build artifacts:
+```yaml
+- name: List build artifacts
+  run: find src-tauri/target/release/bundle -type f
+```
+
+### Handle Missing Artifacts Gracefully
+
+Use `if-no-files-found` to avoid build failures:
+```yaml
+- uses: actions/upload-artifact@v4
+  with:
+    name: macos-builds
+    path: src-tauri/target/release/bundle/dmg/*.dmg
+    if-no-files-found: warn  # or 'error' to fail
+```
+
+### Common Build Failures
+
+**Issue: Missing package-lock.json**
+```bash
+# Generate lock file locally
+npm install
+# Commit the file
+git add package-lock.json
+git commit -m "chore: add package-lock.json"
+```
+
+**Issue: Build artifacts not found**
+```yaml
+# Add debug step
+- name: Debug - Show bundle directory
+  run: |
+    echo "Bundle directory contents:"
+    ls -laR src-tauri/target/release/bundle || true
+```
+
+**Issue: Rust target not installed**
+```yaml
+# Ensure Rust targets are added
+- uses: dtolnay/rust-toolchain@stable
+  with:
+    targets: aarch64-apple-darwin,x86_64-apple-darwin
+```
+
+### Best Practices Checklist
+
+Before triggering a release:
+
+- [ ] Update `package.json` version
+- [ ] Update `src-tauri/tauri.conf.json` version
+- [ ] Update `CHANGELOG.md` with release notes
+- [ ] Ensure `package-lock.json` is committed
+- [ ] Test build locally: `npm run tauri build`
+- [ ] Verify all dependencies are in `package.json`
+- [ ] Check Node.js version is 24+
+- [ ] Verify Rust targets are installed
+
+### Release Workflow Template
+
+```yaml
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - run: npm ci --legacy-peer-deps
+      - run: npm run build
+      - run: npm run tauri build -- --target x86_64-apple-darwin
+        env:
+          RUST_BACKTRACE: 1
+      - run: npm run tauri build -- --target aarch64-apple-darwin
+        env:
+          RUST_BACKTRACE: 1
+      - run: find src-tauri/target/release/bundle -type f
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-builds
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: warn
+```
 
 ## Example Implementation
 

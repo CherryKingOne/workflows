@@ -2,6 +2,69 @@
 
 Common issues and solutions when building and releasing Tauri applications.
 
+## Recent Issues (2026-04-09)
+
+### Node.js 20 Deprecation Warning
+
+**Issue:** GitHub Actions shows deprecation warning
+```
+Node.js 20 actions are deprecated. Actions will be forced to run with Node.js 24
+by default starting June 2nd, 2026.
+```
+
+**Solution:**
+1. Update Node.js version in workflow:
+```yaml
+- uses: actions/setup-node@v4
+  with:
+    node-version: '24'
+```
+
+2. Add environment variable:
+```yaml
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+```
+
+### npm ci Peer Dependency Errors
+
+**Issue:** `npm ci` fails with peer dependency conflicts
+```
+npm ERR! ERESOLVE unable to resolve dependency tree
+```
+
+**Solution:**
+Use `--legacy-peer-deps` flag:
+```yaml
+- run: npm ci --legacy-peer-deps
+```
+
+### Build Exits with Code 1
+
+**Issue:** Build fails with exit code 1 but no clear error message
+
+**Solution:**
+1. Enable Rust backtrace:
+```yaml
+- run: npm run tauri build
+  env:
+    RUST_BACKTRACE: 1
+```
+
+2. Add artifact listing step:
+```yaml
+- name: List build artifacts
+  run: find src-tauri/target/release/bundle -type f
+```
+
+3. Add debug output:
+```yaml
+- name: Debug build directory
+  run: |
+    echo "Checking build output..."
+    ls -laR src-tauri/target/release/bundle || true
+```
+
 ## Build Issues
 
 ### macOS Build Fails

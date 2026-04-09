@@ -2,6 +2,46 @@
 
 Quick commands and snippets for Tauri multi-platform releases.
 
+## Latest Updates (2026-04-09)
+
+### Node.js 24 Required
+
+```yaml
+# Always use Node.js 24
+- uses: actions/setup-node@v4
+  with:
+    node-version: '24'
+    cache: 'npm'
+
+# Force Node.js 24 globally
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+```
+
+### npm ci with Legacy Peer Deps
+
+```yaml
+# Avoid peer dependency errors
+- run: npm ci --legacy-peer-deps
+```
+
+### Enable Rust Debug Output
+
+```yaml
+# Better error messages
+- run: npm run tauri build
+  env:
+    RUST_BACKTRACE: 1
+```
+
+### Verify Build Artifacts
+
+```yaml
+# Always check what was built
+- name: List build artifacts
+  run: find src-tauri/target/release/bundle -type f
+```
+
 ## Essential Commands
 
 ### Build Commands
