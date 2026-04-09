@@ -65,17 +65,27 @@ jobs:
 
       - name: Rename DMG files
         run: |
-          cd src-tauri/target/release/bundle/dmg
+          DMG_DIR="src-tauri/target/release/bundle/dmg"
+          
+          if [ ! -d "$DMG_DIR" ]; then
+            echo "DMG directory not found, skipping rename"
+            exit 0
+          fi
+          
+          cd "$DMG_DIR"
+          
           if ls *_x64.dmg 1> /dev/null 2>&1; then
             for f in *_x64.dmg; do
               mv "$f" "WeiMeng_${{ steps.get_version.outputs.VERSION }}_x64.dmg"
             done
           fi
+          
           if ls *_aarch64.dmg 1> /dev/null 2>&1; then
             for f in *_aarch64.dmg; do
               mv "$f" "WeiMeng_${{ steps.get_version.outputs.VERSION }}_aarch64.dmg"
             done
           fi
+          
           ls -lh
 
       - name: Upload macOS artifacts
