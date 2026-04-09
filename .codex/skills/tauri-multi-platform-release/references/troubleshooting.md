@@ -1,0 +1,440 @@
+# Troubleshooting Guide
+
+Common issues and solutions when building and releasing Tauri applications.
+
+## Build Issues
+
+### macOS Build Fails
+
+#### Issue: Rust Target Not Found
+```
+error: can't find crate for `std`
+error: could not compile `core`
+```
+
+**Solution:**
+```bash
+# Add Rust targets
+rustup target add x86_64-apple-darwin
+rustup target add aarch64-apple-darwin
+```
+
+#### Issue: Xcode Command Line Tools Missing
+```
+xcrun: error: unable to find utility "xcodebuild"
+```
+
+**Solution:**
+```bash
+# Install Xcode Command Line Tools
+xcode-select --install
+
+# Or install full Xcode from App Store
+```
+
+#### Issue: Code Signing Fails
+```
+error: The specified item could not be found in the keychain
+```
+
+**Solution:**
+1. Check certificate is installed in Keychain
+2. Verify signing identity:
+   ```bash
+   security find-identity -v -p codesigning
+   ```
+3. Update `tauri.conf.json`:
+   ```json
+   {
+     "bundle": {
+       "macOS": {
+         "signingIdentity": "Developer ID Application: Your Name (TEAM_ID)"
+       }
+     }
+   }
+   ```
+
+#### Issue: Notarization Fails
+```
+The signature of the binary is invalid
+```
+
+**Solution:**
+1. Ensure code signing is correct
+2. Check Apple ID and app-specific password
+3. Verify team ID
+4. Check network connectivity
+
+### Windows Build Fails
+
+#### Issue: MSVC Toolchain Not Found
+```
+error: linker `link.exe` not found
+```
+
+**Solution:**
+1. Install Visual Studio Build Tools
+2. Install Desktop development with C++
+3. Restart terminal/IDE
+
+#### Issue: WebView2 Not Found
+```
+error: WebView2Loader.dll not found
+```
+
+**Solution:**
+WebView2 is included in Windows 10/11 by default. For older Windows:
+1. Download WebView2 Runtime
+2. Include in installer or require users to install
+
+#### Issue: Path Too Long
+```
+error: The filename or extension is too long
+```
+
+**Solution:**
+Enable long paths in Windows:
+```powershell
+# Run as Administrator
+New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+  -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+```
+
+### Linux Build Fails
+
+#### Issue: Missing GTK Dependencies
+```
+error: Package 'gtk+-3.0' not found
+```
+
+**Solution:**
+```bash
+# Ubuntu/Debian
+sudo apt-get install libgtk-3-dev
+
+# Fedora
+sudo dnf install gtk3-devel
+
+# Arch
+sudo pacman -S gtk3
+```
+
+#### Issue: Missing WebKit Dependencies
+```
+error: Package 'webkit2gtk-4.0' not found
+```
+
+**Solution:**
+```bash
+# Ubuntu/Debian
+sudo apt-get install libwebkit2gtk-4.0-dev
+
+# Fedora
+sudo dnf install webkit2gtk3-devel
+
+# Arch
+sudo pacman -S webkit2gtk
+```
+
+#### Issue: Missing Other Dependencies
+```
+error: Package 'libappindicator3-0.1' not found
+```
+
+**Solution:**
+```bash
+# Install all required dependencies
+sudo apt-get install -y \
+  libgtk-3-dev \
+  libwebkit2gtk-4.0-dev \
+  libappindicator3-dev \
+  librsvg2-dev \
+  patchelf
+```
+
+## Release Issues
+
+### GitHub Actions Failures
+
+#### Issue: Out of Memory
+```
+error: Process completed with exit code 137
+```
+
+**Solution:**
+1. Reduce parallel jobs
+2. Add swap space in workflow:
+   ```yaml
+   - name: Configure swap
+     run: |
+       sudo fallocate -l 4G /swapfile
+       sudo chmod 600 /swapfile
+       sudo mkswap /swapfile
+       sudo swapon /swapfile
+   ```
+
+#### Issue: Timeout
+```
+Error: The operation was canceled
+```
+
+**Solution:**
+1. Increase timeout:
+   ```yaml
+   jobs:
+     build:
+       timeout-minutes: 60  # Default is 360
+   ```
+
+#### Issue: Permission Denied
+```
+error: Permission denied (publickey)
+```
+
+**Solution:**
+1. Check repository permissions
+2. Verify `GITHUB_TOKEN` is set
+3. Check workflow permissions:
+   ```yaml
+   permissions:
+     contents: write
+   ```
+
+### Release Not Created
+
+#### Issue: Tag Format Incorrect
+```
+Workflow not triggered
+```
+
+**Solution:**
+Ensure tag format matches pattern:
+```bash
+# Correct
+git tag v1.0.0
+git push origin v1.0.0
+
+# Incorrect (won't trigger)
+git tag 1.0.0        # Missing 'v' prefix
+git tag v1.0         # Missing patch version
+```
+
+#### Issue: GitHub Token Missing
+```
+Error: Resource not accessible by integration
+```
+
+**Solution:**
+1. Check workflow has access to secrets:
+   ```yaml
+   env:
+     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+   ```
+2. Verify repository settings allow Actions to create releases
+
+### Artifacts Missing
+
+#### Issue: No Files Uploaded
+```
+Warning: No files were found
+```
+
+**Solution:**
+1. Check build output directory
+2. Verify artifact path:
+   ```yaml
+   - uses: actions/upload-artifact@v4
+     with:
+       name: macos-builds
+       path: src-tauri/target/release/bundle/dmg/*.dmg
+   ```
+3. Add debug step:
+   ```yaml
+   - name: List files
+     run: find src-tauri/target/release/bundle -type f
+   ```
+
+## Runtime Issues
+
+### macOS: App Won't Open
+
+#### Issue: App is Damaged
+```
+"App" is damaged and can't be opened
+```
+
+**Solution:**
+1. Remove quarantine attribute:
+   ```bash
+   xattr -cr /path/to/WeiMeng.app
+   ```
+2. Or allow in System Preferences:
+   - Security & Privacy → General → Open Anyway
+
+#### Issue: Unsigned App Warning
+```
+Cannot verify developer
+```
+
+**Solution:**
+1. Right-click app → Open
+2. Or code sign the application
+3. Or allow in System Preferences
+
+### Windows: SmartScreen Warning
+
+#### Issue: Windows Protected Your PC
+```
+Microsoft Defender SmartScreen prevented an unrecognized app from starting
+```
+
+**Solution:**
+1. Click "More info" → "Run anyway"
+2. Or code sign with trusted certificate
+3. Build reputation over time
+
+### Linux: Missing Libraries
+
+#### Issue: Library Not Found
+```
+error while loading shared libraries: libwebkit2gtk-4.0.so.37
+```
+
+**Solution:**
+```bash
+# Ubuntu/Debian
+sudo apt-get install libwebkit2gtk-4.0-37
+
+# Or use AppImage (includes dependencies)
+./WeiMeng_0.0.1_x64.AppImage
+```
+
+## Performance Issues
+
+### Slow Build Times
+
+**Solutions:**
+
+1. **Enable Caching:**
+   ```yaml
+   - uses: actions/cache@v4
+     with:
+       path: |
+         ~/.cargo/registry
+         ~/.cargo/git
+         src-tauri/target
+       key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+   ```
+
+2. **Use Incremental Builds:**
+   ```toml
+   # Cargo.toml
+   [profile.release]
+   incremental = true
+   ```
+
+3. **Optimize Dependencies:**
+   - Remove unused crates
+   - Use smaller alternatives
+   - Disable unnecessary features
+
+### Large Binary Size
+
+**Solutions:**
+
+1. **Strip Binary:**
+   ```yaml
+   - name: Strip binary
+     run: strip src-tauri/target/release/WeiMeng
+   ```
+
+2. **Optimize Cargo.toml:**
+   ```toml
+   [profile.release]
+   opt-level = "z"     # Optimize for size
+   lto = true          # Link-time optimization
+   codegen-units = 1   # Better optimization
+   strip = true        # Strip symbols
+   ```
+
+3. **Compress Assets:**
+   - Minify JavaScript/CSS
+   - Optimize images
+   - Use WebP instead of PNG
+
+## Debug Tips
+
+### Enable Verbose Logging
+
+**GitHub Actions:**
+```yaml
+env:
+  ACTIONS_STEP_DEBUG: true
+  ACTIONS_RUNNER_DEBUG: true
+```
+
+**Tauri Build:**
+```bash
+RUST_BACKTRACE=1 npm run tauri build
+```
+
+**Cargo Build:**
+```bash
+RUST_LOG=debug cargo build --release
+```
+
+### Check Build Logs
+
+1. Go to Actions tab in GitHub
+2. Select the failed workflow run
+3. Expand each step to see logs
+4. Look for error messages or warnings
+
+### Local Testing
+
+Test builds locally before pushing:
+
+```bash
+# macOS
+npm run tauri build -- --target x86_64-apple-darwin
+
+# Test the built app
+open src-tauri/target/release/bundle/macos/WeiMeng.app
+```
+
+### Common Debug Commands
+
+```bash
+# Check Rust version
+rustc --version
+cargo --version
+
+# Check installed targets
+rustup target list --installed
+
+# Check node version
+node --version
+npm --version
+
+# Verify Tauri CLI
+npm run tauri -- --version
+
+# Check dependencies
+cargo tree
+npm list
+```
+
+## Getting Help
+
+1. **Tauri Documentation:** https://tauri.app/v2/guides/
+2. **Tauri Discord:** https://discord.com/invite/tauri
+3. **GitHub Issues:** https://github.com/tauri-apps/tauri/issues
+4. **Stack Overflow:** Tag questions with `tauri`
+
+When asking for help, include:
+- Operating system and version
+- Rust version (`rustc --version`)
+- Node.js version (`node --version`)
+- Tauri version
+- Error messages and logs
+- Steps to reproduce
