@@ -146,6 +146,8 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
   const [isCollapsed, setIsCollapsed] = useState(Boolean(data.isCollapsed));
   const [hovered, setHovered] = useState(false);
   const [promptText, setPromptText] = useState(data.promptText ?? '');
+  const [isApiKeyReminderOpen, setIsApiKeyReminderOpen] = useState(false);
+  const [apiKeyReminderMessage, setApiKeyReminderMessage] = useState('');
 
   /**
    * 将后端模型配置转换为下拉选项格式
@@ -340,6 +342,21 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
    * 3. 再由 infrastructure 层适配 Tauri/Rust 函数
    */
   const handleGenerateImage = () => {
+    const currentModelConfig = imageModelConfigs.find((config) => config.model_id === currentModelName);
+    const hasConfiguredApiKey = Boolean(currentModelConfig?.enabled && currentModelConfig?.api_key);
+
+    if (!currentModelConfig) {
+      setApiKeyReminderMessage('当前未找到可用的图片模型配置，请先在“模型接口配置”中检查 Image 配置。');
+      setIsApiKeyReminderOpen(true);
+      return;
+    }
+
+    if (!hasConfiguredApiKey) {
+      setApiKeyReminderMessage('当前模型尚未配置可用 API Key，请先在“模型接口配置”中填写并启用后再运行。');
+      setIsApiKeyReminderOpen(true);
+      return;
+    }
+
     const promptDraft: ImageGenerationPromptDraft = {
       promptText,
       modelName: currentModelName,
@@ -1027,6 +1044,30 @@ export function ImageGenerationNodeCard({ id, data, selected }: NodeProps<ImageG
           animation-delay: 0.14s;
         }
       `}</style>
+
+      {isApiKeyReminderOpen && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="w-[420px] max-w-[92vw] rounded-xl border border-white/10 bg-[#0f0f10] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.7)]">
+            <div className="mb-3 flex items-center gap-2 text-[16px] font-medium text-zinc-100">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" className="text-amber-400">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9.303 3.376c.866 1.5-.217 3.374-1.948 3.374H4.645c-1.73 0-2.813-1.874-1.948-3.374L10.051 3.378c.866-1.5 3.032-1.5 3.898 0l7.354 12.748Z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              <span>运行前检查</span>
+            </div>
+            <p className="text-[14px] leading-6 text-zinc-300">{apiKeyReminderMessage}</p>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsApiKeyReminderOpen(false)}
+                className="rounded-lg border border-white/10 bg-zinc-800 px-4 py-2 text-[13px] text-zinc-200 transition-colors hover:bg-zinc-700"
+              >
+                我知道了
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
