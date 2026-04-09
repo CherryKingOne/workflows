@@ -2106,7 +2106,17 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                 <span>下载</span>
               </button>
-              <button className="hover:text-white transition-colors">清空</button>
+              <button className="flex items-center space-x-1 hover:text-white transition-colors">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2"
+                    d="M17 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V7l-4-4zM7 3v6h8V3M12 12v6"
+                  />
+                </svg>
+                <span>保存</span>
+              </button>
               <button 
                 onClick={(e) => { e.stopPropagation(); setIsStorageModalOpen(true); }} 
                 className="flex items-center space-x-1 hover:text-white transition-colors"
