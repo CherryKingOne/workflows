@@ -1,5 +1,8 @@
 use serde::Deserialize;
+use std::fs;
+use std::io::Read;
 use tauri::State;
+use ureq::Response;
 
 use crate::application::storage::services::QiniuStorageService;
 use crate::application::storage::upload_service::CanvasFileUploadService;
@@ -83,4 +86,54 @@ pub fn upload_canvas_file_asset(
         mime_type: input.mime_type,
         file_bytes: input.file_bytes,
     })
+}
+
+/// 下载远程文件到本地（绕过浏览器 CORS 限制）。
+///
+/// 前端调用：
+/// `invoke<{ bytes: Vec<u8> }>('download_remote_file', { url })`
+///
+/// 说明：
+/// - 用于在 Tauri 后端下载远程文件，避免浏览器的 CORS 限制；
+/// - 返回文件的二进制内容，前端再通过 save dialog 保存到用户选择的位置。
+#[tauri::command]
+pub fn download_remote_file(url: String) -> Result<Vec<u8>, String> {
+    let response: Response = ureq::get(&url)
+        .call()
+        .map_err(|e| format!("Failed to fetch remote file: {}", e))?;
+
+    let mut bytes: Vec<u8> = Vec::new();
+    response
+        .into_reader()
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("Failed to read response body: {}", e))?;
+
+    Ok(bytes)
+}
+
+/// 下载远程文件并保存到指定路径。
+///
+/// 前端调用：
+/// `invoke('download_and_save_file', { url, path })`
+///
+/// 说明：
+/// - 在 Tauri 后端下载远程文件并直接写入到指定路径；
+/// - 绕过浏览器 CORS 限制和 fs plugin 权限限制。
+#[tauri::command]
+pub fn download_and_save_file(url: String, path: String) -> Result<(), String> {
+    // 下载文件
+    let response: Response = ureq::get(&url)
+        .call()
+        .map_err(|e| format!("Failed to fetch remote file: {}", e))?;
+
+    let mut bytes: Vec<u8> = Vec::new();
+    response
+        .into_reader()
+        .read_to_end(&mut bytes)
+        .map_err(|e| format!("Failed to read response body: {}", e))?;
+
+    // 写入文件
+    fs::write(&path, bytes).map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(())
 }

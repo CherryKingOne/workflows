@@ -2,6 +2,9 @@
 
 import React, { useEffect, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { save } from '@tauri-apps/plugin-dialog';
+import { isTauri } from '@tauri-apps/api/core';
+import { invoke } from '@tauri-apps/api/core';
 
 interface PreviewMediaModalProps {
   url: string;
@@ -26,6 +29,7 @@ export function PreviewMediaModal({ url, mimeType, name, onClose }: PreviewMedia
   const isAudio = mimeType.startsWith('audio/');
 
   const [copyLabel, setCopyLabel] = useState('复制');
+  const [downloadLabel, setDownloadLabel] = useState('下载');
 
   // ESC 关闭
   const handleKeyDown = useCallback(
@@ -42,15 +46,108 @@ export function PreviewMediaModal({ url, mimeType, name, onClose }: PreviewMedia
 
   // 下载
   const handleDownload = useCallback(
-    (e: React.MouseEvent) => {
+    async (e: React.MouseEvent) => {
       e.stopPropagation();
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name ?? 'preview';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      setDownloadLabel('下载中...');
+
+      const fileName = name ?? 'preview';
+
+      // 从文件名提取扩展名
+      const getExtension = (filename: string): string => {
+        const parts = filename.split('.');
+        if (parts.length > 1) {
+          return parts[parts.length - 1].toLowerCase();
+        }
+        // 根据 mimeType 推断扩展名
+        if (mimeType.startsWith('image/png')) return 'png';
+        if (mimeType.startsWith('image/jpeg') || mimeType.startsWith('image/jpg')) return 'jpg';
+        if (mimeType.startsWith('image/gif')) return 'gif';
+        if (mimeType.startsWith('image/webp')) return 'webp';
+        if (mimeType.startsWith('video/mp4')) return 'mp4';
+        if (mimeType.startsWith('audio/mpeg')) return 'mp3';
+        if (mimeType.startsWith('audio/wav')) return 'wav';
+        return '';
+      };
+
+      const extension = getExtension(fileName);
+
+      // 检查是否在 Tauri 环境中
+      const inTauri = await isTauri();
+      console.log('[PreviewMediaModal] isTauri:', inTauri);
+
+      if (inTauri) {
+        try {
+          // 构建 filters
+          const filters = extension
+            ? [
+                {
+                  name: mimeType.startsWith('image/')
+                    ? 'Image'
+                    : mimeType.startsWith('video/')
+                      ? 'Video'
+                      : mimeType.startsWith('audio/')
+                        ? 'Audio'
+                        : 'File',
+                  extensions: [extension],
+                },
+              ]
+            : [];
+
+          // 弹出保存对话框
+          const filePath = await save({
+            defaultPath: fileName,
+            filters,
+          });
+
+          console.log('[PreviewMediaModal] save dialog returned:', filePath);
+
+          // 用户取消了保存对话框
+          if (!filePath) {
+            setDownloadLabel('下载');
+            return;
+          }
+
+          // 使用 Tauri 后端下载并保存文件（绕过 CORS 和 fs 权限限制）
+          await invoke('download_and_save_file', { url, path: filePath });
+          setDownloadLabel('已保存');
+        } catch (err) {
+          console.error('[PreviewMediaModal] Download error:', err);
+          setDownloadLabel('下载失败');
+        }
+      } else {
+        // 浏览器环境：使用传统下载方式
+        try {
+          const response = await fetch(url);
+          if (!response.ok) {
+            throw new Error(`Failed to download: ${response.status}`);
+          }
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          const anchor = document.createElement('a');
+          anchor.href = objectUrl;
+          anchor.download = fileName;
+          anchor.style.display = 'none';
+          document.body.appendChild(anchor);
+          anchor.click();
+          document.body.removeChild(anchor);
+          URL.revokeObjectURL(objectUrl);
+          setDownloadLabel('已开始');
+        } catch {
+          // 降级方案
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          anchor.download = fileName;
+          anchor.target = '_blank';
+          anchor.rel = 'noopener noreferrer';
+          anchor.style.display = 'none';
+          document.body.appendChild(anchor);
+          anchor.click();
+          document.body.removeChild(anchor);
+          setDownloadLabel('已开始');
+        }
+      }
+
+      window.setTimeout(() => setDownloadLabel('下载'), 1600);
     },
     [url, name]
   );
@@ -167,7 +264,7 @@ export function PreviewMediaModal({ url, mimeType, name, onClose }: PreviewMedia
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
-          下载
+          {downloadLabel}
         </button>
 
         {/* 复制按钮 */}

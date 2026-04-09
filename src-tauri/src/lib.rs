@@ -18,6 +18,8 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -77,6 +79,8 @@ pub fn run() {
             commands::storage::get_qiniu_config,
             commands::storage::save_qiniu_config,
             commands::storage::upload_canvas_file_asset,
+            commands::storage::download_remote_file,
+            commands::storage::download_and_save_file,
             commands::model_config::get_all_model_configs,
             commands::model_config::get_model_config,
             commands::model_config::update_model_config,
