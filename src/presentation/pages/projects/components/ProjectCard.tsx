@@ -74,13 +74,10 @@ export function ProjectCard({ project, onClick, onEdit, onDelete }: ProjectCardP
         </p>
       )}
 
-      <div className="flex items-end justify-between mt-auto pt-2">
+      <div className="flex items-end mt-auto pt-2">
         <div className="flex flex-col gap-1">
           <p className="text-xs text-zinc-600 font-medium">更新于 {formatDate(project.meta.updatedAt)}</p>
         </div>
-        <span className="text-[11px] font-medium px-2.5 py-1 rounded-md bg-white/5 border border-white/5 text-zinc-300">
-          0 个节点
-        </span>
       </div>
     </div>
   );
