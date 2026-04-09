@@ -186,50 +186,87 @@ interface CompareRenderableAsset {
 }
 
 /**
- * 从上传节点提取可用于对比的首个素材
+ * 从“可作为对比输入”的来源节点提取首个可渲染素材
  *
- * 当前规则：
- * - 只取 `selectedAssets[0]`
- * - 必须有 previewUrl 才能渲染
+ * 支持来源：
+ * - 上传节点（selectedAssets[0]）
+ * - 预览节点（previewMedia）
+ * - 图片生成节点（generatedMedia）
  */
-function extractComparableAssetFromUploadNode(
-  node: FileUploadWorkflowNode,
+function extractComparableAssetFromSourceNode(
+  node: CanvasWorkflowNode,
 ): CompareRenderableAsset | null {
-  const firstAsset = node.data.selectedAssets?.[0];
-  if (!firstAsset?.previewUrl) {
+  if (isFileUploadWorkflowNode(node)) {
+    const firstAsset = node.data.selectedAssets?.[0];
+    if (!firstAsset?.previewUrl) {
+      return null;
+    }
+
+    if (firstAsset.mimeType.startsWith('image/')) {
+      return {
+        name: firstAsset.name,
+        mimeType: firstAsset.mimeType,
+        previewUrl: firstAsset.previewUrl,
+        kind: 'image',
+        sourceCardWidth: node.data.cardWidth ?? DEFAULT_FILE_UPLOAD_CARD_WIDTH,
+        sourceCardHeight: node.data.cardHeight ?? DEFAULT_FILE_UPLOAD_CARD_HEIGHT,
+      };
+    }
+
+    if (firstAsset.mimeType.startsWith('video/')) {
+      return {
+        name: firstAsset.name,
+        mimeType: firstAsset.mimeType,
+        previewUrl: firstAsset.previewUrl,
+        kind: 'video',
+        sourceCardWidth: node.data.cardWidth ?? DEFAULT_FILE_UPLOAD_CARD_WIDTH,
+        sourceCardHeight: node.data.cardHeight ?? DEFAULT_FILE_UPLOAD_CARD_HEIGHT,
+      };
+    }
+
+    if (firstAsset.mimeType.startsWith('audio/')) {
+      return {
+        name: firstAsset.name,
+        mimeType: firstAsset.mimeType,
+        previewUrl: firstAsset.previewUrl,
+        kind: 'audio',
+        sourceCardWidth: node.data.cardWidth ?? DEFAULT_FILE_UPLOAD_CARD_WIDTH,
+        sourceCardHeight: node.data.cardHeight ?? DEFAULT_FILE_UPLOAD_CARD_HEIGHT,
+      };
+    }
+
     return null;
   }
 
-  if (firstAsset.mimeType.startsWith('image/')) {
+  if (isPreviewWorkflowNode(node)) {
+    const previewMedia = node.data.previewMedia;
+    if (!previewMedia?.url) {
+      return null;
+    }
+
     return {
-      name: firstAsset.name,
-      mimeType: firstAsset.mimeType,
-      previewUrl: firstAsset.previewUrl,
-      kind: 'image',
-      sourceCardWidth: node.data.cardWidth ?? DEFAULT_FILE_UPLOAD_CARD_WIDTH,
-      sourceCardHeight: node.data.cardHeight ?? DEFAULT_FILE_UPLOAD_CARD_HEIGHT,
+      name: previewMedia.name ?? '预览素材',
+      mimeType: previewMedia.mimeType,
+      previewUrl: previewMedia.url,
+      kind: previewMedia.kind,
+      sourceCardWidth: node.data.cardWidth ?? DEFAULT_PREVIEW_NODE_CARD_WIDTH,
+      sourceCardHeight: node.data.cardHeight ?? DEFAULT_PREVIEW_NODE_CARD_HEIGHT,
     };
   }
 
-  if (firstAsset.mimeType.startsWith('video/')) {
-    return {
-      name: firstAsset.name,
-      mimeType: firstAsset.mimeType,
-      previewUrl: firstAsset.previewUrl,
-      kind: 'video',
-      sourceCardWidth: node.data.cardWidth ?? DEFAULT_FILE_UPLOAD_CARD_WIDTH,
-      sourceCardHeight: node.data.cardHeight ?? DEFAULT_FILE_UPLOAD_CARD_HEIGHT,
-    };
-  }
+  if (isImageGenerationWorkflowNode(node)) {
+    const generatedMedia = node.data.generatedMedia;
+    if (!generatedMedia?.url) {
+      return null;
+    }
 
-  if (firstAsset.mimeType.startsWith('audio/')) {
     return {
-      name: firstAsset.name,
-      mimeType: firstAsset.mimeType,
-      previewUrl: firstAsset.previewUrl,
-      kind: 'audio',
-      sourceCardWidth: node.data.cardWidth ?? DEFAULT_FILE_UPLOAD_CARD_WIDTH,
-      sourceCardHeight: node.data.cardHeight ?? DEFAULT_FILE_UPLOAD_CARD_HEIGHT,
+      name: generatedMedia.name ?? '生成素材',
+      mimeType: generatedMedia.mimeType,
+      previewUrl: generatedMedia.url,
+      kind: generatedMedia.kind,
+      sourceCardWidth: node.data.cardWidth ?? DEFAULT_IMAGE_NODE_CARD_WIDTH,
+      sourceCardHeight: node.data.expandedHeight ?? DEFAULT_IMAGE_NODE_EXPANDED_HEIGHT,
     };
   }
 
@@ -558,7 +595,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    *
    * 当前规则（前端可用版）：
    * 1. 只处理“连到 compare 节点”的入边
-   * 2. 每个来源上传节点只取 `selectedAssets[0]`
+   * 2. 每个来源节点只取首个可渲染素材（上传/预览/图片生成）
    * 3. 至少 1 路可渲染素材即可进入 ready 并显示内容
    * 4. 如果有 2 路素材，要求类型一致（image/video/audio）
    *
@@ -579,8 +616,8 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
         const incomingEdges = edges.filter((edge) => edge.target === node.id);
         const incomingComparableAssets = incomingEdges
           .map((edge) => nodeById.get(edge.source))
-          .filter((sourceNode): sourceNode is FileUploadWorkflowNode => Boolean(sourceNode && isFileUploadWorkflowNode(sourceNode)))
-          .map((uploadNode) => extractComparableAssetFromUploadNode(uploadNode))
+          .filter((sourceNode): sourceNode is CanvasWorkflowNode => Boolean(sourceNode))
+          .map((sourceNode) => extractComparableAssetFromSourceNode(sourceNode))
           .filter((asset): asset is CompareRenderableAsset => Boolean(asset));
 
         const firstTwoAssets = incomingComparableAssets.slice(0, 2);
@@ -815,7 +852,6 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
         const renderableMedia = firstRenderableMedia && firstRenderableMedia.url
           ? firstRenderableMedia
           : undefined;
-        const hasRenderableMedia = Boolean(renderableMedia);
         const hasExistingPreviewSnapshot =
           Boolean(currentPreviewMedia?.url) && currentPreviewStatus !== 'loading';
         const shouldKeepExistingPreviewSnapshot =
