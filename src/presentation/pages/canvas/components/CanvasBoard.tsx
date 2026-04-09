@@ -11,7 +11,7 @@ import {
   type OnNodesChange,
   type Viewport,
 } from '@xyflow/react';
-import { useRouter } from 'next/navigation';
+import { useHashRouter } from '../../../components/common/HashRouter';
 import { invoke } from '@tauri-apps/api/core';
 import { Project } from '../../../../domain/project/entities/Project';
 import { ApiSettingsModal } from './modals/ApiSettingsModalNew';
@@ -488,7 +488,7 @@ interface CanvasBoardProps {
  * - 当前重点是结构清晰、便于扩展、便于交接，而不是一次性塞满全部功能。
  */
 export function CanvasBoard({ project }: CanvasBoardProps) {
-  const router = useRouter();
+  const { navigateToProjects } = useHashRouter();
   const canvasNodesRef = useRef<CanvasWorkflowNode[]>([]);
   const canvasEdgesRef = useRef<Edge[]>([]);
   const isSnapshotBootstrapDoneRef = useRef(false);
@@ -2379,7 +2379,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
           
           {/* 左侧项目信息 */}
           <div 
-            onClick={() => router.push('/projects')}
+            onClick={() => navigateToProjects()}
             className="flex shrink-0 items-center space-x-2 bg-[#1a1a1a] px-3 py-1.5 rounded-full border border-white/5 pointer-events-auto cursor-pointer hover:bg-[#252525] transition-colors shadow-lg"
           >
             <div className="w-6 h-6 flex items-center justify-center">

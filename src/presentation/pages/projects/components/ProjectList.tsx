@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useProjects } from '../../../../../src/presentation/hooks/useProjects';
 import { ProjectCard } from './ProjectCard';
 import { Button } from '../../../components/common/Button';
@@ -9,6 +8,7 @@ import { Modal } from '../../../components/common/Modal';
 import { Input } from '../../../components/common/Input';
 import { Dropdown } from '../../../components/common/Dropdown';
 import { Project } from '../../../../domain/project/entities/Project';
+import { useHashRouter } from '../../../components/common/HashRouter';
 
 /**
  * 项目列表页面主组件 (ProjectList)
@@ -24,7 +24,7 @@ import { Project } from '../../../../domain/project/entities/Project';
  * [Update 2026-04-02] - 初始版本，设计完成黑色深邃主题 UI 与弹窗逻辑。
  */
 export function ProjectList() {
-  const router = useRouter();
+  const { navigateToCanvas } = useHashRouter();
   // [Hooks 调用] 从 useProjects hook 中获取项目列表数据以及增删改查的方法
   const { projects, isLoading, error, createProject, updateProject, deleteProject } = useProjects();
   
@@ -181,7 +181,7 @@ export function ProjectList() {
               <ProjectCard 
                 key={project.id.value}
                 project={project}
-                onClick={() => router.push(`/canvas/${project.id.value}`)}
+                onClick={() => navigateToCanvas(project.id.value)}
                 onEdit={() => openEditModal(project)}
                 onDelete={() => openDeleteModal(project)}
               />
