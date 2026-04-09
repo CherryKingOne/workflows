@@ -189,7 +189,10 @@ error: Package 'webkit2gtk-4.0' not found
 
 **Solution:**
 ```bash
-# Ubuntu/Debian
+# Ubuntu/Debian (use 4.1 for newer Tauri versions)
+sudo apt-get install libwebkit2gtk-4.1-dev libjavascriptcoregtk-4.1-dev
+
+# For older projects using 4.0
 sudo apt-get install libwebkit2gtk-4.0-dev
 
 # Fedora
@@ -197,6 +200,48 @@ sudo dnf install webkit2gtk3-devel
 
 # Arch
 sudo pacman -S webkit2gtk
+```
+
+**Important:** Tauri 2.x requires WebKitGTK 4.1, not 4.0:
+```yaml
+# GitHub Actions
+- name: Install system dependencies
+  run: |
+    sudo apt-get update
+    sudo apt-get install -y \
+      libwebkit2gtk-4.1-dev \
+      libjavascriptcoregtk-4.1-dev
+```
+
+#### Issue: javascriptcoregtk-4.1 Not Found (2026-04-09)
+
+**Issue:** Build fails with:
+```
+The system library `javascriptcoregtk-4.1` required by crate `javascriptcore-rs-sys` was not found.
+```
+
+**Solution:**
+Install the correct WebKitGTK 4.1 packages:
+```bash
+# Ubuntu/Debian
+sudo apt-get install -y \
+  libwebkit2gtk-4.1-dev \
+  libjavascriptcoregtk-4.1-dev
+```
+
+For GitHub Actions:
+```yaml
+- name: Install system dependencies
+  run: |
+    sudo apt-get update
+    sudo apt-get install -y \
+      libgtk-3-dev \
+      libwebkit2gtk-4.1-dev \
+      libjavascriptcoregtk-4.1-dev \
+      libappindicator3-dev \
+      librsvg2-dev \
+      patchelf
+```
 ```
 
 #### Issue: Missing Other Dependencies

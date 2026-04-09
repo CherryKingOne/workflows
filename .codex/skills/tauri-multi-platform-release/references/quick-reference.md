@@ -210,7 +210,17 @@ winget install Microsoft.VisualStudio.2022.BuildTools
 ### Linux (Ubuntu/Debian)
 
 ```bash
+# Tauri 2.x (WebKitGTK 4.1)
 sudo apt-get update
+sudo apt-get install -y \
+  libgtk-3-dev \
+  libwebkit2gtk-4.1-dev \
+  libjavascriptcoregtk-4.1-dev \
+  libappindicator3-dev \
+  librsvg2-dev \
+  patchelf
+
+# Tauri 1.x (WebKitGTK 4.0)
 sudo apt-get install -y \
   libgtk-3-dev \
   libwebkit2gtk-4.0-dev \

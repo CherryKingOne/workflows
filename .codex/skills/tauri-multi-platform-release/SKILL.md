@@ -223,6 +223,16 @@ env:
 - Ubuntu 18.04+ or equivalent
 - Required libraries:
   ```bash
+  # For Tauri 2.x (use 4.1)
+  sudo apt-get install -y \
+    libgtk-3-dev \
+    libwebkit2gtk-4.1-dev \
+    libjavascriptcoregtk-4.1-dev \
+    libappindicator3-dev \
+    librsvg2-dev \
+    patchelf
+  
+  # For Tauri 1.x (use 4.0)
   sudo apt-get install -y \
     libgtk-3-dev \
     libwebkit2gtk-4.0-dev \
