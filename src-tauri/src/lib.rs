@@ -6,13 +6,13 @@ pub mod infrastructure;
 use application::project::services::ProjectService;
 use application::storage::services::QiniuStorageService;
 use application::storage::upload_service::CanvasFileUploadService;
+use commands::model_config::ModelConfigState;
+use infrastructure::model_config_repository::SqliteModelConfigRepository;
 use infrastructure::persistence::sqlite::project_repo::SqliteProjectRepository;
 use infrastructure::persistence::sqlite::qiniu_config_repo::SqliteQiniuConfigRepository;
 use infrastructure::storage::qiniu_uploader::QiniuSdkUploader;
-use infrastructure::model_config_repository::SqliteModelConfigRepository;
-use commands::model_config::ModelConfigState;
-use std::sync::Mutex;
 use std::fs;
+use std::sync::Mutex;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -72,6 +72,8 @@ pub fn run() {
             commands::project::create_project,
             commands::project::update_project,
             commands::project::delete_project,
+            commands::project::save_project_workflow_snapshot,
+            commands::project::get_project_workflow_snapshot,
             commands::storage::get_qiniu_config,
             commands::storage::save_qiniu_config,
             commands::storage::upload_canvas_file_asset,

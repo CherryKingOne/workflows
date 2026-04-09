@@ -34,6 +34,10 @@ import {
   type ImageGenerationWorkflowNode,
   type PreviewWorkflowNode,
 } from './canvas-nodes/types';
+import {
+  type PersistedCanvasNode,
+  type ProjectWorkflowSnapshotV1,
+} from './workflowSnapshot';
 
 /**
  * 上传文件支持的 MIME 前缀
@@ -57,6 +61,7 @@ const DEFAULT_IMAGE_NODE_COLLAPSED_HEIGHT = 88;
 const DEFAULT_PREVIEW_NODE_CARD_WIDTH = 500;
 const DEFAULT_PREVIEW_NODE_CARD_HEIGHT = 340;
 const PREVIEW_LOADING_MIN_VISIBLE_MS = 700;
+const WORKFLOW_AUTO_SAVE_DEBOUNCE_MS = 800;
 const INITIAL_CANVAS_VIEWPORT: Viewport = { x: -1500, y: -1200, zoom: 0.89 };
 /**
  * 动态卡片尺寸边界（按当前视觉稿收敛）
@@ -94,6 +99,41 @@ interface UploadedAssetDto {
 
 interface CanvasEdgeData extends Record<string, unknown> {
   connectedAt?: number;
+}
+
+interface SaveProjectWorkflowSnapshotInputDto {
+  projectId: string;
+  snapshotJson: string;
+}
+
+interface GetProjectWorkflowSnapshotInputDto {
+  projectId: string;
+}
+
+function getNodeSequenceFromId(nodeId: string): number | null {
+  const matched = nodeId.match(/-(\d+)$/);
+  if (!matched) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(matched[1], 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function getNextNodeSequenceFromNodes(nodes: { id: string }[]): number {
+  let maxSequence = 0;
+  nodes.forEach((node) => {
+    const sequence = getNodeSequenceFromId(node.id);
+    if (sequence && sequence > maxSequence) {
+      maxSequence = sequence;
+    }
+  });
+
+  return maxSequence + 1;
 }
 
 /**
@@ -451,10 +491,13 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   const router = useRouter();
   const canvasNodesRef = useRef<CanvasWorkflowNode[]>([]);
   const canvasEdgesRef = useRef<Edge[]>([]);
+  const isSnapshotBootstrapDoneRef = useRef(false);
+  const shouldSkipNextAutoSaveRef = useRef(true);
   const toolbarUploadInputRef = useRef<HTMLInputElement | null>(null);
   const toolbarUploadTargetNodeIdRef = useRef<string | null>(null);
   const { configs: imageModelConfigs } = useModelConfig('image');
   const imageModelConfigsRef = useRef(imageModelConfigs);
+  const [canvasLayerRenderKey, setCanvasLayerRenderKey] = useState(0);
   
   /**
    * 画布视口状态（React Flow viewport）
@@ -1526,6 +1569,282 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     event.currentTarget.value = '';
   }, [handleRequestUpload]);
 
+  const toPersistedCanvasNode = useCallback((node: CanvasWorkflowNode): PersistedCanvasNode => {
+    if (isFileUploadWorkflowNode(node)) {
+      const persistedData = { ...node.data } as Record<string, unknown>;
+      delete persistedData.onRequestRemove;
+      delete persistedData.onRequestBackendUpload;
+      return {
+        ...node,
+        data: persistedData,
+      };
+    }
+
+    if (isImageGenerationWorkflowNode(node)) {
+      const persistedData = { ...node.data } as Record<string, unknown>;
+      delete persistedData.onRequestRemove;
+      delete persistedData.onRequestGenerateImage;
+      delete persistedData.onRequestUpdatePromptText;
+      delete persistedData.onRequestUpdateModelName;
+      delete persistedData.onRequestUpdateAspectRatio;
+      delete persistedData.onRequestUpdateResolution;
+      delete persistedData.onRequestUpdateImageCount;
+      return {
+        ...node,
+        data: persistedData,
+      };
+    }
+
+    if (isPreviewWorkflowNode(node)) {
+      const persistedData = { ...node.data } as Record<string, unknown>;
+      delete persistedData.onRequestRemove;
+      delete persistedData.onRequestSyncPreview;
+      return {
+        ...node,
+        data: persistedData,
+      };
+    }
+
+    if (isCompareWorkflowNode(node)) {
+      const persistedData = { ...node.data } as Record<string, unknown>;
+      delete persistedData.onRequestRemove;
+      delete persistedData.onRequestSyncCompareMedia;
+      return {
+        ...node,
+        data: persistedData,
+      };
+    }
+
+    const fallbackNode = node as CanvasWorkflowNode;
+    return {
+      ...fallbackNode,
+      data: fallbackNode.data as Record<string, unknown>,
+    };
+  }, []);
+
+  const hydratePersistedCanvasNode = useCallback((node: PersistedCanvasNode): CanvasWorkflowNode | null => {
+    if (node.type === FILE_UPLOAD_NODE_TYPE) {
+      return {
+        ...node,
+        data: {
+          ...(node.data as Record<string, unknown>),
+          onRequestRemove: handleRemoveNode,
+          onRequestBackendUpload: handleRequestUpload,
+        },
+      } as unknown as FileUploadWorkflowNode;
+    }
+
+    if (node.type === IMAGE_GENERATION_NODE_TYPE) {
+      return {
+        ...node,
+        data: {
+          ...(node.data as Record<string, unknown>),
+          onRequestRemove: handleRemoveNode,
+          onRequestGenerateImage: handleRequestGenerateImage,
+          onRequestUpdatePromptText: handleUpdateImagePromptText,
+          onRequestUpdateModelName: handleUpdateImageModelName,
+          onRequestUpdateAspectRatio: handleUpdateImageAspectRatio,
+          onRequestUpdateResolution: handleUpdateImageResolution,
+          onRequestUpdateImageCount: handleUpdateImageCount,
+        },
+      } as unknown as ImageGenerationWorkflowNode;
+    }
+
+    if (node.type === PREVIEW_NODE_TYPE) {
+      return {
+        ...node,
+        data: {
+          ...(node.data as Record<string, unknown>),
+          onRequestRemove: handleRemoveNode,
+          onRequestSyncPreview: handleRequestSyncPreview,
+        },
+      } as unknown as PreviewWorkflowNode;
+    }
+
+    if (node.type === COMPARE_NODE_TYPE) {
+      return {
+        ...node,
+        data: {
+          ...(node.data as Record<string, unknown>),
+          onRequestRemove: handleRemoveNode,
+          onRequestSyncCompareMedia: handleRequestSyncCompareMedia,
+        },
+      } as unknown as CompareWorkflowNode;
+    }
+
+    return null;
+  }, [
+    handleRemoveNode,
+    handleRequestGenerateImage,
+    handleRequestSyncCompareMedia,
+    handleRequestSyncPreview,
+    handleRequestUpload,
+    handleUpdateImageAspectRatio,
+    handleUpdateImageCount,
+    handleUpdateImageModelName,
+    handleUpdateImagePromptText,
+    handleUpdateImageResolution,
+  ]);
+
+  const parseWorkflowSnapshotV1 = useCallback((snapshotJson: string): ProjectWorkflowSnapshotV1 | null => {
+    try {
+      const parsed = JSON.parse(snapshotJson) as ProjectWorkflowSnapshotV1;
+      if (
+        parsed.version !== 'v1'
+        || !Array.isArray(parsed.nodes)
+        || !Array.isArray(parsed.edges)
+        || !parsed.viewport
+      ) {
+        return null;
+      }
+      return parsed;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const loadWorkflowSnapshotFromBackend = useCallback(async (projectId: string): Promise<string | null> => {
+    const input: GetProjectWorkflowSnapshotInputDto = { projectId };
+    return await invoke<string | null>('get_project_workflow_snapshot', { input });
+  }, []);
+
+  const saveWorkflowSnapshotToBackend = useCallback(
+    async (projectId: string, snapshotJson: string): Promise<void> => {
+      const input: SaveProjectWorkflowSnapshotInputDto = {
+        projectId,
+        snapshotJson,
+      };
+      await invoke('save_project_workflow_snapshot', { input });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const projectId = project?.id.value;
+    if (!projectId) {
+      return;
+    }
+
+    let cancelled = false;
+    isSnapshotBootstrapDoneRef.current = false;
+    shouldSkipNextAutoSaveRef.current = true;
+
+    const loadSnapshot = async () => {
+      try {
+        const snapshotJson = await loadWorkflowSnapshotFromBackend(projectId);
+        if (cancelled || !snapshotJson) {
+          if (!cancelled) {
+            setCanvasNodes([]);
+            setCanvasEdges([]);
+            setViewport(INITIAL_CANVAS_VIEWPORT);
+            nodeSequenceRef.current = 1;
+            setCanvasLayerRenderKey((previous) => previous + 1);
+          }
+          return;
+        }
+
+        const parsedSnapshot = parseWorkflowSnapshotV1(snapshotJson);
+        if (!parsedSnapshot) {
+          console.warn('[WorkflowSnapshot] Snapshot JSON is invalid, fallback to empty canvas.');
+          if (!cancelled) {
+            setCanvasNodes([]);
+            setCanvasEdges([]);
+            setViewport(INITIAL_CANVAS_VIEWPORT);
+            nodeSequenceRef.current = 1;
+            setCanvasLayerRenderKey((previous) => previous + 1);
+          }
+          return;
+        }
+
+        if (parsedSnapshot.projectId !== projectId) {
+          console.warn('[WorkflowSnapshot] Snapshot projectId mismatch, fallback to empty canvas.');
+          if (!cancelled) {
+            setCanvasNodes([]);
+            setCanvasEdges([]);
+            setViewport(INITIAL_CANVAS_VIEWPORT);
+            nodeSequenceRef.current = 1;
+            setCanvasLayerRenderKey((previous) => previous + 1);
+          }
+          return;
+        }
+
+        const hydratedNodes = parsedSnapshot.nodes
+          .map((persistedNode) => hydratePersistedCanvasNode(persistedNode))
+          .filter((node): node is CanvasWorkflowNode => Boolean(node));
+
+        if (!cancelled) {
+          setCanvasNodes(hydratedNodes);
+          setCanvasEdges(parsedSnapshot.edges);
+          setViewport(parsedSnapshot.viewport ?? INITIAL_CANVAS_VIEWPORT);
+          nodeSequenceRef.current = getNextNodeSequenceFromNodes(hydratedNodes);
+          setCanvasLayerRenderKey((previous) => previous + 1);
+        }
+      } catch (error) {
+        console.warn('[WorkflowSnapshot] Failed to load snapshot, fallback to empty canvas.', error);
+        if (!cancelled) {
+          setCanvasNodes([]);
+          setCanvasEdges([]);
+          setViewport(INITIAL_CANVAS_VIEWPORT);
+          nodeSequenceRef.current = 1;
+          setCanvasLayerRenderKey((previous) => previous + 1);
+        }
+      } finally {
+        if (!cancelled) {
+          isSnapshotBootstrapDoneRef.current = true;
+        }
+      }
+    };
+
+    void loadSnapshot();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hydratePersistedCanvasNode,
+    loadWorkflowSnapshotFromBackend,
+    parseWorkflowSnapshotV1,
+    project?.id.value,
+  ]);
+
+  useEffect(() => {
+    const projectId = project?.id.value;
+    if (!projectId || !isSnapshotBootstrapDoneRef.current) {
+      return;
+    }
+
+    if (shouldSkipNextAutoSaveRef.current) {
+      shouldSkipNextAutoSaveRef.current = false;
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const snapshot: ProjectWorkflowSnapshotV1 = {
+        version: 'v1',
+        projectId,
+        viewport,
+        nodes: canvasNodes.map((node) => toPersistedCanvasNode(node)),
+        edges: canvasEdges,
+        savedAt: Date.now(),
+      };
+      const snapshotJson = JSON.stringify(snapshot);
+
+      void saveWorkflowSnapshotToBackend(projectId, snapshotJson).catch((error) => {
+        console.warn('[WorkflowSnapshot] Failed to auto save snapshot.', error);
+      });
+    }, WORKFLOW_AUTO_SAVE_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    canvasEdges,
+    canvasNodes,
+    project?.id.value,
+    saveWorkflowSnapshotToBackend,
+    toPersistedCanvasNode,
+    viewport,
+  ]);
+
   /**
    * 画布渲染用节点（派生数据）
    *
@@ -2040,12 +2359,13 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
             3. 最后在右键菜单或工具栏接入创建动作
           */}
           <CanvasNodeLayer
+            key={canvasLayerRenderKey}
             nodes={renderedCanvasNodes}
             edges={canvasEdges}
             onNodesChange={handleCanvasNodesChange}
             onEdgesChange={handleCanvasEdgesChange}
             onConnect={handleConnect}
-            initialViewport={INITIAL_CANVAS_VIEWPORT}
+            initialViewport={viewport}
             onViewportChange={handleViewportChange}
           />
         </div>

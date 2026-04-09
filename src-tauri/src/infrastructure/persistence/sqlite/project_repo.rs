@@ -29,10 +29,44 @@ impl SqliteProjectRepository {
             )",
             [],
         )?;
+        Self::ensure_workflow_snapshot_columns_exist(&conn)?;
 
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
         })
+    }
+
+    fn has_column(conn: &Connection, column_name: &str) -> Result<bool, rusqlite::Error> {
+        let exists: i64 = conn.query_row(
+            "SELECT EXISTS(
+                SELECT 1
+                FROM pragma_table_info('projects')
+                WHERE name = ?1
+            )",
+            params![column_name],
+            |row| row.get(0),
+        )?;
+        Ok(exists != 0)
+    }
+
+    fn ensure_workflow_snapshot_columns_exist(conn: &Connection) -> Result<(), rusqlite::Error> {
+        if !Self::has_column(conn, "workflow_snapshot_json")? {
+            conn.execute(
+                "ALTER TABLE projects
+                 ADD COLUMN workflow_snapshot_json TEXT",
+                [],
+            )?;
+        }
+
+        if !Self::has_column(conn, "workflow_snapshot_updated_at")? {
+            conn.execute(
+                "ALTER TABLE projects
+                 ADD COLUMN workflow_snapshot_updated_at INTEGER",
+                [],
+            )?;
+        }
+
+        Ok(())
     }
 
     /// 辅助函数：将 SQLite 行转换为 Project 实体
@@ -130,5 +164,173 @@ impl ProjectRepository for SqliteProjectRepository {
             .map_err(|e| e.to_string())?;
 
         Ok(())
+    }
+
+    fn save_workflow_snapshot(&self, id: &ProjectId, snapshot_json: &str) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let now_ms = Utc::now().timestamp_millis();
+
+        let affected = conn
+            .execute(
+                "UPDATE projects
+                 SET workflow_snapshot_json = ?2,
+                     workflow_snapshot_updated_at = ?3,
+                     updated_at = ?3
+                 WHERE id = ?1",
+                params![id.value, snapshot_json, now_ms],
+            )
+            .map_err(|e| e.to_string())?;
+
+        if affected == 0 {
+            return Err(format!("Project with ID {} not found", id.value));
+        }
+
+        Ok(())
+    }
+
+    fn get_workflow_snapshot(&self, id: &ProjectId) -> Result<Option<String>, String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+
+        let snapshot = conn
+            .query_row(
+                "SELECT workflow_snapshot_json FROM projects WHERE id = ?1",
+                params![id.value],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()
+            .map_err(|e| e.to_string())?;
+
+        match snapshot {
+            Some(value) => Ok(value),
+            None => Err(format!("Project with ID {} not found", id.value)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_db_path() -> String {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time before UNIX_EPOCH")
+            .as_nanos();
+
+        std::env::temp_dir()
+            .join(format!("project-repo-{nanos}.db"))
+            .to_string_lossy()
+            .to_string()
+    }
+
+    #[test]
+    fn should_migrate_legacy_projects_table_to_add_snapshot_columns() {
+        let db_path = temp_db_path();
+        let conn = Connection::open(&db_path).expect("legacy db should open");
+        conn.execute(
+            "CREATE TABLE projects (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+            )",
+            [],
+        )
+        .expect("legacy projects table should be created");
+        drop(conn);
+
+        let _repo = SqliteProjectRepository::new(&db_path).expect("repo should initialize");
+        let migrated_conn = Connection::open(&db_path).expect("migrated db should open");
+
+        let has_snapshot_json: i64 = migrated_conn
+            .query_row(
+                "SELECT EXISTS(
+                    SELECT 1
+                    FROM pragma_table_info('projects')
+                    WHERE name = 'workflow_snapshot_json'
+                )",
+                [],
+                |row| row.get(0),
+            )
+            .expect("workflow_snapshot_json existence query should succeed");
+        let has_snapshot_updated_at: i64 = migrated_conn
+            .query_row(
+                "SELECT EXISTS(
+                    SELECT 1
+                    FROM pragma_table_info('projects')
+                    WHERE name = 'workflow_snapshot_updated_at'
+                )",
+                [],
+                |row| row.get(0),
+            )
+            .expect("workflow_snapshot_updated_at existence query should succeed");
+
+        assert_eq!(has_snapshot_json, 1);
+        assert_eq!(has_snapshot_updated_at, 1);
+    }
+
+    #[test]
+    fn should_save_and_load_project_workflow_snapshot() {
+        let db_path = temp_db_path();
+        let repo = SqliteProjectRepository::new(&db_path).expect("repo should initialize");
+
+        let project = Project::new(
+            "project-123".to_string(),
+            "Test Project".to_string(),
+            "Description".to_string(),
+        );
+        repo.save(&project).expect("project should be saved");
+
+        let snapshot_json = r#"{"version":"v1","nodes":[],"edges":[]}"#;
+        repo.save_workflow_snapshot(&project.id, snapshot_json)
+            .expect("snapshot should be saved");
+
+        let loaded = repo
+            .get_workflow_snapshot(&project.id)
+            .expect("snapshot should be loaded");
+        assert_eq!(loaded, Some(snapshot_json.to_string()));
+    }
+
+    #[test]
+    fn should_return_none_when_project_has_no_workflow_snapshot() {
+        let db_path = temp_db_path();
+        let repo = SqliteProjectRepository::new(&db_path).expect("repo should initialize");
+
+        let project = Project::new(
+            "project-no-snapshot".to_string(),
+            "No Snapshot".to_string(),
+            "Description".to_string(),
+        );
+        repo.save(&project).expect("project should be saved");
+
+        let loaded = repo
+            .get_workflow_snapshot(&project.id)
+            .expect("snapshot query should succeed");
+        assert!(loaded.is_none());
+    }
+
+    #[test]
+    fn should_return_error_for_missing_project_when_reading_or_saving_snapshot() {
+        let db_path = temp_db_path();
+        let repo = SqliteProjectRepository::new(&db_path).expect("repo should initialize");
+        let missing_id = ProjectId {
+            value: "missing-project".to_string(),
+        };
+
+        let save_result = repo.save_workflow_snapshot(&missing_id, r#"{"version":"v1"}"#);
+        assert!(save_result.is_err());
+        assert!(save_result
+            .err()
+            .expect("save should fail")
+            .contains("not found"));
+
+        let load_result = repo.get_workflow_snapshot(&missing_id);
+        assert!(load_result.is_err());
+        assert!(load_result
+            .err()
+            .expect("load should fail")
+            .contains("not found"));
     }
 }

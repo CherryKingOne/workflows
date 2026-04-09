@@ -14,4 +14,10 @@ pub trait ProjectRepository {
 
     /// 根据 ID 删除项目
     fn delete(&self, id: &ProjectId) -> Result<(), String>;
+
+    /// 保存项目工作流快照（JSON 字符串）
+    fn save_workflow_snapshot(&self, id: &ProjectId, snapshot_json: &str) -> Result<(), String>;
+
+    /// 读取项目工作流快照（JSON 字符串）
+    fn get_workflow_snapshot(&self, id: &ProjectId) -> Result<Option<String>, String>;
 }

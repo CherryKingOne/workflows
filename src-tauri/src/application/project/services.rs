@@ -57,4 +57,21 @@ impl<R: ProjectRepository> ProjectService<R> {
         let project_id = ProjectId { value: id };
         self.repository.delete(&project_id)
     }
+
+    /// 用例：保存项目工作流快照
+    pub fn save_project_workflow_snapshot(
+        &self,
+        id: String,
+        snapshot_json: String,
+    ) -> Result<(), String> {
+        let project_id = ProjectId { value: id };
+        self.repository
+            .save_workflow_snapshot(&project_id, &snapshot_json)
+    }
+
+    /// 用例：读取项目工作流快照
+    pub fn get_project_workflow_snapshot(&self, id: String) -> Result<Option<String>, String> {
+        let project_id = ProjectId { value: id };
+        self.repository.get_workflow_snapshot(&project_id)
+    }
 }

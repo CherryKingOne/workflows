@@ -1,6 +1,7 @@
 use crate::application::project::services::ProjectService;
 use crate::domain::project::entities::Project;
 use crate::infrastructure::persistence::sqlite::project_repo::SqliteProjectRepository;
+use serde::Deserialize;
 use tauri::State;
 
 /// 类型别名：为了在 Tauri State 中方便注入
@@ -48,4 +49,43 @@ pub fn update_project(
 #[tauri::command]
 pub fn delete_project(id: String, service: State<'_, AppProjectService>) -> Result<(), String> {
     service.delete_project(id)
+}
+
+/// 保存项目工作流快照的入参 DTO。
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveProjectWorkflowSnapshotInput {
+    pub project_id: String,
+    pub snapshot_json: String,
+}
+
+/// 读取项目工作流快照的入参 DTO。
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetProjectWorkflowSnapshotInput {
+    pub project_id: String,
+}
+
+/// 保存项目工作流快照（JSON 字符串）。
+///
+/// 前端调用：
+/// `invoke('save_project_workflow_snapshot', { input: { projectId, snapshotJson } })`
+#[tauri::command]
+pub fn save_project_workflow_snapshot(
+    input: SaveProjectWorkflowSnapshotInput,
+    service: State<'_, AppProjectService>,
+) -> Result<(), String> {
+    service.save_project_workflow_snapshot(input.project_id, input.snapshot_json)
+}
+
+/// 读取项目工作流快照（JSON 字符串）。
+///
+/// 前端调用：
+/// `invoke<string | null>('get_project_workflow_snapshot', { input: { projectId } })`
+#[tauri::command]
+pub fn get_project_workflow_snapshot(
+    input: GetProjectWorkflowSnapshotInput,
+    service: State<'_, AppProjectService>,
+) -> Result<Option<String>, String> {
+    service.get_project_workflow_snapshot(input.project_id)
 }
