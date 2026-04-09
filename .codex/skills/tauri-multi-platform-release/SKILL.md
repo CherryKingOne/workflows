@@ -569,6 +569,43 @@ git commit -m "chore: add package-lock.json"
     targets: aarch64-apple-darwin,x86_64-apple-darwin
 ```
 
+**Issue: DMG directory not found (2026-04-09)**
+
+**Issue:** Build fails with:
+```
+cd: src-tauri/target/release/bundle/dmg: No such file or directory
+```
+
+**Solution:**
+Make DMG rename step more robust:
+```yaml
+- name: Rename DMG files
+  run: |
+    DMG_DIR="src-tauri/target/release/bundle/dmg"
+    
+    # Check if directory exists
+    if [ ! -d "$DMG_DIR" ]; then
+      echo "DMG directory not found, skipping rename"
+      exit 0
+    fi
+    
+    cd "$DMG_DIR"
+    
+    # Rename logic...
+    if ls *_x64.dmg 1> /dev/null 2>&1; then
+      for f in *_x64.dmg; do
+        mv "$f" "WeiMeng_${{ steps.get_version.outputs.VERSION }}_x64.dmg"
+      done
+    fi
+    
+    ls -lh
+```
+
+**Why this happens:**
+1. Tauri build may not generate DMG if build fails
+2. Different Tauri versions may use different output paths
+3. Build artifacts step runs before rename, so we can see what was actually created
+
 ### Best Practices Checklist
 
 Before triggering a release:
@@ -581,6 +618,8 @@ Before triggering a release:
 - [ ] Verify all dependencies are in `package.json`
 - [ ] Check Node.js version is 24+
 - [ ] Verify Rust targets are installed
+- [ ] Check WebKitGTK version (4.1 for Tauri 2.x)
+- [ ] Verify DMG directory exists before renaming
 
 ### Release Workflow Template
 

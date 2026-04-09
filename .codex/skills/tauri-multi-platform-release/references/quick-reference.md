@@ -399,6 +399,105 @@ chmod +x WeiMeng.AppImage
 - Code signing: 1-2 minutes
 - Notarization: 5-10 minutes
 
+## Release Experience Log
+
+### Key Lessons from v0.0.1 Release (2026-04-09)
+
+#### 1. Node.js Version Matters
+```yaml
+# Always use Node.js 24
+node-version: '24'
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+```
+
+#### 2. Platform-Specific Dependencies
+```yaml
+# Linux requires WebKitGTK 4.1 for Tauri 2.x
+libwebkit2gtk-4.1-dev
+libjavascriptcoregtk-4.1-dev
+```
+
+#### 3. Robust Error Handling
+```yaml
+# Check directory exists before operations
+if [ ! -d "$DMG_DIR" ]; then
+  echo "Directory not found, skipping"
+  exit 0
+fi
+```
+
+#### 4. Use Legacy Peer Deps
+```yaml
+# Avoid npm dependency conflicts
+- run: npm ci --legacy-peer-deps
+```
+
+#### 5. Enable Debug Output
+```yaml
+# Better error messages
+- run: npm run tauri build
+  env:
+    RUST_BACKTRACE: 1
+```
+
+#### 6. Verify Build Artifacts
+```yaml
+# Always list what was built
+- name: List build artifacts
+  run: find src-tauri/target/release/bundle -type f
+```
+
+#### 7. Graceful Artifact Upload
+```yaml
+# Don't fail on missing files
+- uses: actions/upload-artifact@v4
+  with:
+    if-no-files-found: warn  # not 'error'
+```
+
+### Common Build Iterations
+
+Real-world example from v0.0.1 release:
+
+1. **Attempt 1**: Node.js 20 deprecation warnings
+2. **Attempt 2**: Linux WebKitGTK 4.0 → 4.1 fix
+3. **Attempt 3**: macOS DMG directory not found
+4. **Attempt 4**: All fixes applied, successful build
+
+**Total time**: ~2 hours including debugging
+
+### Prevention Checklist
+
+Before pushing tag, verify:
+- [ ] Node.js 24 in workflow
+- [ ] WebKitGTK 4.1 for Linux
+- [ ] `--legacy-peer-deps` in npm ci
+- [ ] `RUST_BACKTRACE=1` for builds
+- [ ] Directory checks before cd/mv
+- [ ] `if-no-files-found: warn` for artifacts
+- [ ] Build artifact listing steps added
+- [ ] Local build tested successfully
+
+### Quick Debug Commands
+
+```bash
+# Test local build
+npm run tauri build
+
+# Check output
+ls -la src-tauri/target/release/bundle/
+
+# Verify DMG
+find src-tauri/target/release/bundle -name "*.dmg"
+
+# Check Rust targets
+rustup target list --installed
+
+# Test specific architecture
+npm run tauri build -- --target x86_64-apple-darwin
+```
+
 ## File Sizes
 
 Approximate sizes for a basic Tauri app:

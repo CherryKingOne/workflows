@@ -65,6 +65,67 @@ Use `--legacy-peer-deps` flag:
     ls -laR src-tauri/target/release/bundle || true
 ```
 
+### macOS DMG Directory Not Found (2026-04-09)
+
+**Issue:** Build fails with:
+```
+cd: src-tauri/target/release/bundle/dmg: No such file or directory
+```
+
+**Root causes:**
+1. Tauri build didn't generate DMG (build failed earlier)
+2. Different Tauri version uses different output path
+3. Missing or incorrect build configuration
+
+**Solution:**
+Make rename step robust to missing directories:
+```yaml
+- name: Rename DMG files
+  run: |
+    DMG_DIR="src-tauri/target/release/bundle/dmg"
+    
+    # Check if directory exists first
+    if [ ! -d "$DMG_DIR" ]; then
+      echo "DMG directory not found, skipping rename"
+      echo "This might indicate Tauri build failed to generate DMG"
+      exit 0
+    fi
+    
+    cd "$DMG_DIR"
+    
+    # Rename DMG files
+    if ls *_x64.dmg 1> /dev/null 2>&1; then
+      for f in *_x64.dmg; do
+        mv "$f" "WeiMeng_${{ steps.get_version.outputs.VERSION }}_x64.dmg"
+      done
+    fi
+    
+    if ls *_aarch64.dmg 1> /dev/null 2>&1; then
+      for f in *_aarch64.dmg; do
+        mv "$f" "WeiMeng_${{ steps.get_version.outputs.VERSION }}_aarch64.dmg"
+      done
+    fi
+    
+    ls -lh
+```
+
+**Debug steps:**
+```yaml
+# Add before rename step
+- name: List all bundle contents
+  run: |
+    echo "=== Bundle directory structure ==="
+    find src-tauri/target/release/bundle -type d || true
+    echo "=== All files in bundle ==="
+    find src-tauri/target/release/bundle -type f || true
+```
+
+**Prevention:**
+1. Always check directory exists before `cd`
+2. Use `if-no-files-found: warn` in artifact upload
+3. Add verbose logging for build steps
+4. Test locally before pushing tags
+
 ## Build Issues
 
 ### macOS Build Fails
