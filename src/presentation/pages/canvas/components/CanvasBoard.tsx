@@ -2172,6 +2172,11 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   const [isRestarting, setIsRestarting] = useState(false);
 
   /**
+   * Agent Beta 提示弹窗状态
+   */
+  const [showAgentBetaTip, setShowAgentBetaTip] = useState(false);
+
+  /**
    * 更新管理 Hook
    *
    * 提供检查更新、下载更新、安装重启等功能。
@@ -2574,9 +2579,13 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       {/* ========================================================= */}
       {/* 3. 左下角 Agent 入口 */}
       {/* ========================================================= */}
-      <div className="fixed bottom-4 left-4 z-20 fixed-ui group">
+      <div 
+        className="fixed bottom-4 left-4 z-20 fixed-ui"
+        onMouseLeave={() => setShowAgentBetaTip(false)}
+      >
         <button 
           className="w-8 h-8 bg-[#171717]/80 backdrop-blur-md border border-white/10 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors shadow-lg text-white relative"
+          onClick={() => setShowAgentBetaTip(true)}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -2600,11 +2609,23 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
             {/* 嘴巴/表情 */}
             <path d="M9 15h6" />
           </svg>
-          {/* Tooltip - 延迟 2s 显示，离开立即消失 */}
-          <span className="absolute left-full ml-2 px-2 py-1 bg-[#1a1a1a] text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-200 delay-[2000ms] group-hover:delay-0 pointer-events-none">
-            Agent
-          </span>
         </button>
+
+        {/* Agent Beta 提示弹窗 */}
+        {showAgentBetaTip && (
+          <div className="absolute left-full ml-2 bottom-0 w-64 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl p-3 fixed-ui">
+            {/* 标题 */}
+            <div className="mb-2">
+              <span className="text-xs font-medium bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">
+                Beta
+              </span>
+            </div>
+            {/* 内容 */}
+            <p className="text-xs text-neutral-400 leading-relaxed">
+              该功能为内部独立测试阶段，暂不开放
+            </p>
+          </div>
+        )}
       </div>
 
       {/*
