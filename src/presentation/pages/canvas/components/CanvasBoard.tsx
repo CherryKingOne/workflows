@@ -12,7 +12,9 @@ import {
   type Viewport,
 } from '@xyflow/react';
 import { useHashRouter } from '../../../components/common/HashRouter';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { Project } from '../../../../domain/project/entities/Project';
 import { ApiSettingsModal } from './modals/ApiSettingsModalNew';
 import { StorageModal } from './modals/StorageModal';
@@ -135,6 +137,18 @@ function getNextNodeSequenceFromNodes(nodes: { id: string }[]): number {
   });
 
   return maxSequence + 1;
+}
+
+function sanitizeFileNameSegment(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return 'workflow';
+  return trimmed.replace(/[\\/:*?"<>|]/g, '-');
+}
+
+function buildWorkflowExportFileName(projectName: string | undefined): string {
+  const safeProjectName = sanitizeFileNameSegment(projectName ?? 'workflow');
+  const timestamp = new Date().toISOString().replace(/[:]/g, '-').slice(0, 19);
+  return `${safeProjectName}-${timestamp}.json`;
 }
 
 /**
@@ -2175,6 +2189,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * Agent Beta 提示弹窗状态
    */
   const [showAgentBetaTip, setShowAgentBetaTip] = useState(false);
+  const [exportWorkflowLabel, setExportWorkflowLabel] = useState('导出工作流');
 
   /**
    * 更新管理 Hook
@@ -2286,6 +2301,68 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     setViewport(nextViewport);
     setContextMenu((previous) => (previous.visible ? { ...previous, visible: false } : previous));
   }, []);
+
+  const handleExportWorkflow = useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+
+    const projectId = project?.id.value;
+    if (!projectId) {
+      return;
+    }
+
+    setExportWorkflowLabel('导出中...');
+
+    try {
+      const snapshot: ProjectWorkflowSnapshotV1 = {
+        version: 'v1',
+        projectId,
+        viewport,
+        nodes: canvasNodes.map((node) => toPersistedCanvasNode(node)),
+        edges: canvasEdges,
+        savedAt: Date.now(),
+      };
+      const snapshotJson = JSON.stringify(snapshot, null, 2);
+      const defaultFileName = buildWorkflowExportFileName(project?.meta.name);
+
+      const inTauri = await isTauri();
+      if (inTauri) {
+        const savePath = await save({
+          defaultPath: defaultFileName,
+          filters: [{ name: 'JSON', extensions: ['json'] }],
+        });
+        if (!savePath) {
+          setExportWorkflowLabel('导出工作流');
+          return;
+        }
+        await writeTextFile(savePath, snapshotJson);
+      } else {
+        const blob = new Blob([snapshotJson], { type: 'application/json;charset=utf-8' });
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = objectUrl;
+        anchor.download = defaultFileName;
+        anchor.style.display = 'none';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+        URL.revokeObjectURL(objectUrl);
+      }
+
+      setExportWorkflowLabel('已导出');
+      window.setTimeout(() => setExportWorkflowLabel('导出工作流'), 1600);
+    } catch (error) {
+      console.error('[CanvasBoard] Export workflow failed:', error);
+      setExportWorkflowLabel('导出失败');
+      window.setTimeout(() => setExportWorkflowLabel('导出工作流'), 1600);
+    }
+  }, [
+    canvasEdges,
+    canvasNodes,
+    project?.id.value,
+    project?.meta.name,
+    toPersistedCanvasNode,
+    viewport,
+  ]);
 
   /**
    * 打开右键菜单
@@ -2557,11 +2634,14 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
                 </svg>
                 <span>导入工作流</span>
               </button>
-              <button className="flex items-center space-x-1 hover:text-white transition-colors cursor-pointer">
+              <button
+                onClick={handleExportWorkflow}
+                className="flex items-center space-x-1 hover:text-white transition-colors cursor-pointer"
+              >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
                 </svg>
-                <span>导出工作流</span>
+                <span>{exportWorkflowLabel}</span>
               </button>
               <button 
                 onClick={(e) => { e.stopPropagation(); setIsStorageModalOpen(true); }} 
