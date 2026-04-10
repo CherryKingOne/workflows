@@ -2452,8 +2452,17 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
         return;
       }
 
+      // 使用 hydratePersistedCanvasNode 为节点绑定回调函数
+      const hydratedNodes: CanvasWorkflowNode[] = [];
+      for (const node of snapshot.nodes) {
+        const hydrated = hydratePersistedCanvasNode(node);
+        if (hydrated) {
+          hydratedNodes.push(hydrated);
+        }
+      }
+
       // 恢复画布状态
-      setCanvasNodes(snapshot.nodes as CanvasWorkflowNode[]);
+      setCanvasNodes(hydratedNodes);
       setCanvasEdges(snapshot.edges);
       setViewport(snapshot.viewport);
 
@@ -2474,7 +2483,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       setImportWorkflowLabel('导入失败');
       window.setTimeout(() => setImportWorkflowLabel('导入工作流'), 1600);
     }
-  }, []);
+  }, [hydratePersistedCanvasNode]);
 
   /**
    * 打开右键菜单
