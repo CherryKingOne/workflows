@@ -20,6 +20,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -86,6 +88,9 @@ pub fn run() {
             commands::model_config::update_model_config,
             commands::model_config::init_model_configs,
             commands::model_config::delete_model_config,
+            commands::updater::check_update,
+            commands::updater::download_update,
+            commands::updater::install_and_restart,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -14,9 +14,6 @@ on:
         required: true
         type: string
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -28,7 +25,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
           cache: 'npm'
 
       - name: Setup Rust
@@ -46,11 +43,15 @@ jobs:
         run: npm run tauri build -- --target x86_64-apple-darwin
         env:
           RUST_BACKTRACE: full
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Build Tauri app (Apple Silicon)
         run: npm run tauri build -- --target aarch64-apple-darwin
         env:
           RUST_BACKTRACE: full
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Get version
         id: get_version
@@ -70,17 +71,19 @@ jobs:
           echo "Apple Silicon build (aarch64-apple-darwin):"
           find src-tauri/target/aarch64-apple-darwin/release/bundle -type f 2>/dev/null || echo "No ARM build artifacts found"
           echo ""
-          echo "Legacy build path (for compatibility):"
-          find src-tauri/target/release/bundle -type f 2>/dev/null || echo "No legacy build artifacts found"
+          echo "Signature files:"
+          find src-tauri/target -name "*.sig" -type f 2>/dev/null || echo "No signature files found"
 
       - name: Collect and rename DMG files
         run: |
           mkdir -p final-artifacts
           
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          
           # Collect Intel builds
           INTEL_DMG=$(find src-tauri/target/x86_64-apple-darwin/release/bundle/dmg -name "*.dmg" 2>/dev/null | head -n 1)
           if [ -n "$INTEL_DMG" ]; then
-            cp "$INTEL_DMG" "final-artifacts/WeiMeng_${{ steps.get_version.outputs.VERSION }}_x64.dmg"
+            cp "$INTEL_DMG" "final-artifacts/WeiMeng_${VERSION}_x64.dmg"
             echo "Found Intel DMG: $INTEL_DMG"
           else
             echo "WARNING: No Intel DMG found"
@@ -89,10 +92,25 @@ jobs:
           # Collect Apple Silicon builds
           ARM_DMG=$(find src-tauri/target/aarch64-apple-darwin/release/bundle/dmg -name "*.dmg" 2>/dev/null | head -n 1)
           if [ -n "$ARM_DMG" ]; then
-            cp "$ARM_DMG" "final-artifacts/WeiMeng_${{ steps.get_version.outputs.VERSION }}_aarch64.dmg"
+            cp "$ARM_DMG" "final-artifacts/WeiMeng_${VERSION}_aarch64.dmg"
             echo "Found Apple Silicon DMG: $ARM_DMG"
           else
             echo "WARNING: No Apple Silicon DMG found"
+          fi
+          
+          # Collect signature files with precise naming (only .dmg.sig)
+          # Intel signature
+          INTEL_SIG=$(find src-tauri/target/x86_64-apple-darwin -name "*.dmg.sig" -type f 2>/dev/null | head -n 1)
+          if [ -n "$INTEL_SIG" ]; then
+            cp "$INTEL_SIG" "final-artifacts/WeiMeng_${VERSION}_x64.dmg.sig"
+            echo "Found Intel SIG: $INTEL_SIG"
+          fi
+          
+          # ARM signature
+          ARM_SIG=$(find src-tauri/target/aarch64-apple-darwin -name "*.dmg.sig" -type f 2>/dev/null | head -n 1)
+          if [ -n "$ARM_SIG" ]; then
+            cp "$ARM_SIG" "final-artifacts/WeiMeng_${VERSION}_aarch64.dmg.sig"
+            echo "Found ARM SIG: $ARM_SIG"
           fi
           
           # Check what we have
@@ -111,7 +129,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-builds
-          path: final-artifacts/*.dmg
+          path: final-artifacts/*
           if-no-files-found: error
 
   build-windows:
@@ -124,7 +142,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
           cache: 'npm'
 
       - name: Setup Rust
@@ -142,6 +160,8 @@ jobs:
         run: npm run tauri build
         env:
           RUST_BACKTRACE: full
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Get version
         id: get_version
@@ -158,12 +178,39 @@ jobs:
         run: |
           echo "=== Checking Tauri build output ==="
           find src-tauri/target/release/bundle -type f 2>/dev/null || echo "No build artifacts found"
+          echo ""
+          echo "Signature files:"
+          find src-tauri/target -name "*.sig" -type f 2>/dev/null || echo "No signature files found"
+
+      - name: Collect Windows artifacts
+        shell: bash
+        run: |
+          mkdir -p final-artifacts
+          
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          
+          # Collect installer (support both nsis and msi)
+          INSTALLER=$(find src-tauri/target/release/bundle -name "*.exe" -type f 2>/dev/null | head -n 1)
+          if [ -n "$INSTALLER" ]; then
+            cp "$INSTALLER" "final-artifacts/WeiMeng_${VERSION}_x64-setup.exe"
+            echo "Found installer: $INSTALLER"
+          fi
+          
+          # Collect signature file (match setup.exe.sig pattern)
+          WIN_SIG=$(find src-tauri/target -name "*.exe.sig" -type f 2>/dev/null | head -n 1)
+          if [ -n "$WIN_SIG" ]; then
+            cp "$WIN_SIG" "final-artifacts/WeiMeng_${VERSION}_x64-setup.exe.sig"
+            echo "Found Windows SIG: $WIN_SIG"
+          fi
+          
+          echo "Final artifacts:"
+          ls -lh final-artifacts/ || true
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-builds
-          path: src-tauri/target/release/bundle/nsis/*.exe
+          path: final-artifacts/*
           if-no-files-found: error
 
   build-linux:
@@ -176,7 +223,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
           cache: 'npm'
 
       - name: Setup Rust
@@ -203,6 +250,8 @@ jobs:
         run: npm run tauri build
         env:
           RUST_BACKTRACE: full
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Get version
         id: get_version
@@ -217,14 +266,45 @@ jobs:
         run: |
           echo "=== Checking Tauri build output ==="
           find src-tauri/target/release/bundle -type f 2>/dev/null || echo "No build artifacts found"
+          echo ""
+          echo "Signature files:"
+          find src-tauri/target -name "*.sig" -type f 2>/dev/null || echo "No signature files found"
+
+      - name: Collect Linux artifacts
+        run: |
+          mkdir -p final-artifacts
+          
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          
+          # Collect AppImage
+          APPIMAGE=$(find src-tauri/target/release/bundle/appimage -name "*.AppImage" -type f 2>/dev/null | head -n 1)
+          if [ -n "$APPIMAGE" ]; then
+            cp "$APPIMAGE" "final-artifacts/WeiMeng_${VERSION}_x64.AppImage"
+            echo "Found AppImage: $APPIMAGE"
+          fi
+          
+          # Collect DEB
+          DEB=$(find src-tauri/target/release/bundle/deb -name "*.deb" -type f 2>/dev/null | head -n 1)
+          if [ -n "$DEB" ]; then
+            cp "$DEB" "final-artifacts/WeiMeng_${VERSION}_amd64.deb"
+            echo "Found DEB: $DEB"
+          fi
+          
+          # Collect signature file (only AppImage.sig for updater)
+          LINUX_SIG=$(find src-tauri/target -name "*.AppImage.sig" -type f 2>/dev/null | head -n 1)
+          if [ -n "$LINUX_SIG" ]; then
+            cp "$LINUX_SIG" "final-artifacts/WeiMeng_${VERSION}_x64.AppImage.sig"
+            echo "Found Linux SIG: $LINUX_SIG"
+          fi
+          
+          echo "Final artifacts:"
+          ls -lh final-artifacts/ || true
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
           name: linux-builds
-          path: |
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/appimage/*.AppImage
+          path: final-artifacts/*
           if-no-files-found: error
 
   create-release:
@@ -269,6 +349,62 @@ jobs:
           echo "All downloaded artifacts:"
           find artifacts -type f -ls
 
+      - name: Generate latest.json
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          
+          # Download URLs
+          MACOS_X64_URL="https://github.com/CherryKingOne/workflows/releases/download/v${VERSION}/WeiMeng_${VERSION}_x64.dmg"
+          MACOS_ARM_URL="https://github.com/CherryKingOne/workflows/releases/download/v${VERSION}/WeiMeng_${VERSION}_aarch64.dmg"
+          WINDOWS_URL="https://github.com/CherryKingOne/workflows/releases/download/v${VERSION}/WeiMeng_${VERSION}_x64-setup.exe"
+          LINUX_APPIMAGE_URL="https://github.com/CherryKingOne/workflows/releases/download/v${VERSION}/WeiMeng_${VERSION}_x64.AppImage"
+          LINUX_DEB_URL="https://github.com/CherryKingOne/workflows/releases/download/v${VERSION}/WeiMeng_${VERSION}_amd64.deb"
+          
+          # Read signatures with precise file pattern matching
+          # macOS: only match .dmg.sig files
+          MACOS_X64_SIG=$(cat artifacts/macos/*x64*.dmg.sig 2>/dev/null | head -n 1 || echo "")
+          MACOS_ARM_SIG=$(cat artifacts/macos/*aarch64*.dmg.sig 2>/dev/null | head -n 1 || echo "")
+          # Windows: only match setup.exe.sig
+          WINDOWS_SIG=$(cat artifacts/windows/*setup.exe.sig 2>/dev/null | head -n 1 || echo "")
+          # Linux: only match AppImage.sig
+          LINUX_SIG=$(cat artifacts/linux/*AppImage*.sig 2>/dev/null | head -n 1 || echo "")
+          
+          echo "=== Signatures ==="
+          echo "macOS x64: ${MACOS_X64_SIG:0:30}..."
+          echo "macOS arm: ${MACOS_ARM_SIG:0:30}..."
+          echo "Windows: ${WINDOWS_SIG:0:30}..."
+          echo "Linux: ${LINUX_SIG:0:30}..."
+          
+          # Create latest.json
+          cat > latest.json << EOF
+          {
+            "version": "${VERSION}",
+            "notes": "WeiMeng v${VERSION}",
+            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "darwin-x86_64": {
+                "signature": "${MACOS_X64_SIG}",
+                "url": "${MACOS_X64_URL}"
+              },
+              "darwin-aarch64": {
+                "signature": "${MACOS_ARM_SIG}",
+                "url": "${MACOS_ARM_URL}"
+              },
+              "windows-x86_64": {
+                "signature": "${WINDOWS_SIG}",
+                "url": "${WINDOWS_URL}"
+              },
+              "linux-x86_64": {
+                "signature": "${LINUX_SIG}",
+                "url": "${LINUX_APPIMAGE_URL}"
+              }
+            }
+          }
+          EOF
+          
+          echo "=== Generated latest.json ==="
+          cat latest.json
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -302,8 +438,12 @@ jobs:
           prerelease: ${{ contains(steps.get_version.outputs.VERSION, '-') }}
           files: |
             artifacts/macos/**/*.dmg
+            artifacts/macos/**/*.sig
             artifacts/windows/**/*.exe
+            artifacts/windows/**/*.sig
             artifacts/linux/**/*.AppImage
             artifacts/linux/**/*.deb
+            artifacts/linux/**/*.sig
+            latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

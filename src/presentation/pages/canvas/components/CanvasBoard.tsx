@@ -18,6 +18,7 @@ import { ApiSettingsModal } from './modals/ApiSettingsModalNew';
 import { StorageModal } from './modals/StorageModal';
 import { useStorage } from '../../../hooks/useStorage';
 import { useModelConfig } from '../../../hooks/useModelConfig';
+import { useUpdater } from '../../../hooks/useUpdater';
 import { CanvasNodeLayer } from './canvas-nodes/CanvasNodeLayer';
 import { UploadedAssetFloatingToolbar } from './toolbars/UploadedAssetFloatingToolbar';
 import { aiModelService } from '@/src/application/aiModel/AiModelApplicationService';
@@ -2171,6 +2172,48 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   const [isRestarting, setIsRestarting] = useState(false);
 
   /**
+   * 更新管理 Hook
+   *
+   * 提供检查更新、下载更新、安装重启等功能。
+   * 在应用启动时自动检查更新，下载完成后显示重启按钮。
+   */
+  const {
+    updateInfo,
+    status: updateStatus,
+    progress,
+    isDownloaded,
+    checkForUpdate,
+    startDownload,
+    installAndRestart,
+  } = useUpdater();
+
+  /**
+   * 应用启动时静默检查更新
+   * 开发环境下跳过检查，避免不必要的错误日志
+   */
+  useEffect(() => {
+    // 开发环境跳过更新检查
+    if (process.env.NODE_ENV === 'development') {
+      return;
+    }
+    // 延迟 3 秒后检查更新，避免影响应用启动速度
+    const timer = setTimeout(() => {
+      checkForUpdate();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [checkForUpdate]);
+
+  /**
+   * 有更新可用时自动开始下载
+   */
+  useEffect(() => {
+    if (updateStatus === 'available' && updateInfo) {
+      // 静默后台下载
+      startDownload();
+    }
+  }, [updateStatus, updateInfo, startDownload]);
+
+  /**
    * API 配置数据管理
    *
    * 【已移除】
@@ -2455,26 +2498,42 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
             - 复杂流程状态机
           */}
           <div className="bg-[#171717]/80 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full flex items-center space-x-4 text-[11px] pointer-events-auto shrink-0 shadow-lg">
-            {/* 重启更新提醒 - TODO: 后续关联前后端逻辑 */}
-            <button
-              className="flex items-center space-x-1 text-green-400 cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isRestarting) return;
-                setIsRestarting(true);
-                // TODO: 实际重启逻辑，完成后设置 setIsRestarting(false)
-              }}
-            >
-              <svg
-                className={`w-3.5 h-3.5 ${isRestarting ? 'animate-spin' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+            {/* 重启更新提醒 - 仅在下载完成后显示 */}
+            {isDownloaded && (
+              <button
+                className="flex items-center space-x-1 text-green-400 cursor-pointer"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (isRestarting) return;
+                  setIsRestarting(true);
+                  try {
+                    await installAndRestart();
+                  } catch (err) {
+                    console.error('[CanvasBoard] Install and restart failed:', err);
+                    setIsRestarting(false);
+                  }
+                }}
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span>{isRestarting ? '重启中...' : '重启更新'}</span>
-            </button>
+                <svg
+                  className={`w-3.5 h-3.5 ${isRestarting ? 'animate-spin' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>{isRestarting ? '重启中...' : `重启更新 ${updateInfo?.version ? `v${updateInfo.version}` : ''}`}</span>
+              </button>
+            )}
+            {/* 下载进度显示 */}
+            {updateStatus === 'downloading' && progress && (
+              <div className="flex items-center space-x-1 text-white/60">
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>下载中 {progress.percent.toFixed(0)}%</span>
+              </div>
+            )}
             <div className="flex items-center space-x-2">
               <div className="flex items-center space-x-1">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
