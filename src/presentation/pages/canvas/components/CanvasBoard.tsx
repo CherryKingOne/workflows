@@ -13,7 +13,7 @@ import {
 } from '@xyflow/react';
 import { useHashRouter } from '../../../components/common/HashRouter';
 import { invoke, isTauri } from '@tauri-apps/api/core';
-import { save } from '@tauri-apps/plugin-dialog';
+import { save, open } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { Project } from '../../../../domain/project/entities/Project';
 import { ApiSettingsModal } from './modals/ApiSettingsModalNew';
@@ -2181,6 +2181,12 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   const [isApiSettingsModalOpen, setIsApiSettingsModalOpen] = useState(false);
 
   /**
+   * 导入/导出工作流标签状态
+   */
+  const [exportWorkflowLabel, setExportWorkflowLabel] = useState('导出工作流');
+  const [importWorkflowLabel, setImportWorkflowLabel] = useState('导入工作流');
+
+  /**
    * 重启更新状态
    */
   const [isRestarting, setIsRestarting] = useState(false);
@@ -2189,7 +2195,6 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * Agent Beta 提示弹窗状态
    */
   const [showAgentBetaTip, setShowAgentBetaTip] = useState(false);
-  const [exportWorkflowLabel, setExportWorkflowLabel] = useState('导出工作流');
 
   /**
    * 更新管理 Hook
@@ -2363,6 +2368,113 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     toPersistedCanvasNode,
     viewport,
   ]);
+
+  /**
+   * 导入工作流
+   *
+   * 【功能说明】
+   * 通过系统文件选择对话框选择 JSON 文件并导入工作流。
+   *
+   * 【处理流程】
+   * 1. 打开系统文件选择对话框
+   * 2. 读取并解析 JSON 文件
+   * 3. 验证工作流快照格式
+   * 4. 恢复画布状态（节点、连线、视口）
+   * 5. 更新节点序列计数器
+   * 6. 触发重新渲染
+   *
+   * 【注意事项】
+   * - 导入会完全替换当前画布内容
+   * - 仅支持 V1 格式的工作流快照
+   */
+  const handleImportWorkflow = useCallback(async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+
+    setImportWorkflowLabel('选择文件...');
+
+    try {
+      const inTauri = await isTauri();
+
+      let snapshot: ProjectWorkflowSnapshotV1 | null = null;
+
+      if (inTauri) {
+        // 使用 Tauri 系统文件选择对话框
+        const selectedPath = await open({
+          multiple: false,
+          filters: [{ name: 'JSON', extensions: ['json'] }],
+        });
+
+        if (!selectedPath) {
+          setImportWorkflowLabel('导入工作流');
+          return;
+        }
+
+        setImportWorkflowLabel('读取中...');
+
+        // 读取文件内容
+        const { readFile } = await import('@tauri-apps/plugin-fs');
+        const fileBytes = await readFile(selectedPath as string);
+        const fileContent = new TextDecoder().decode(fileBytes);
+        const parsed = JSON.parse(fileContent) as ProjectWorkflowSnapshotV1;
+        snapshot = parsed;
+      } else {
+        // Web 环境使用 input file 选择
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+
+        const file = await new Promise<File | null>((resolve) => {
+          input.onchange = () => resolve(input.files?.[0] ?? null);
+          input.click();
+        });
+
+        if (!file) {
+          setImportWorkflowLabel('导入工作流');
+          return;
+        }
+
+        setImportWorkflowLabel('读取中...');
+
+        const fileContent = await file.text();
+        const parsed = JSON.parse(fileContent) as ProjectWorkflowSnapshotV1;
+        snapshot = parsed;
+      }
+
+      // 验证快照格式
+      if (
+        snapshot.version !== 'v1'
+        || !Array.isArray(snapshot.nodes)
+        || !Array.isArray(snapshot.edges)
+        || !snapshot.viewport
+      ) {
+        setImportWorkflowLabel('格式无效');
+        window.setTimeout(() => setImportWorkflowLabel('导入工作流'), 1600);
+        return;
+      }
+
+      // 恢复画布状态
+      setCanvasNodes(snapshot.nodes as CanvasWorkflowNode[]);
+      setCanvasEdges(snapshot.edges);
+      setViewport(snapshot.viewport);
+
+      // 更新节点序列计数器
+      const nextSequence = getNextNodeSequenceFromNodes(snapshot.nodes);
+      nodeSequenceRef.current = nextSequence;
+
+      // 触发重新渲染
+      setCanvasLayerRenderKey((prev) => prev + 1);
+
+      // 标记下次自动保存需要跳过
+      shouldSkipNextAutoSaveRef.current = true;
+
+      setImportWorkflowLabel('已导入');
+      window.setTimeout(() => setImportWorkflowLabel('导入工作流'), 1600);
+    } catch (error) {
+      console.error('[CanvasBoard] Import workflow failed:', error);
+      setImportWorkflowLabel('导入失败');
+      window.setTimeout(() => setImportWorkflowLabel('导入工作流'), 1600);
+    }
+  }, []);
 
   /**
    * 打开右键菜单
@@ -2628,11 +2740,14 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                 <span>下载</span>
               </button>
-              <button className="flex items-center space-x-1 hover:text-white transition-colors cursor-pointer">
+              <button
+                onClick={handleImportWorkflow}
+                className="flex items-center space-x-1 hover:text-white transition-colors cursor-pointer"
+              >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                 </svg>
-                <span>导入工作流</span>
+                <span>{importWorkflowLabel}</span>
               </button>
               <button
                 onClick={handleExportWorkflow}
