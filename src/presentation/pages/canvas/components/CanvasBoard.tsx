@@ -2572,11 +2572,38 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       </header>
 
       {/* ========================================================= */}
-      {/* 3. 左下角帮助 */}
+      {/* 3. 左下角 Agent 入口 */}
       {/* ========================================================= */}
-      <div className="fixed bottom-4 left-4 z-20 fixed-ui">
-        <button className="w-8 h-8 bg-[#171717]/80 backdrop-blur-md border border-white/10 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors shadow-lg text-white">
-          <span className="text-xs font-medium">?</span>
+      <div className="fixed bottom-4 left-4 z-20 fixed-ui group">
+        <button 
+          className="w-8 h-8 bg-[#171717]/80 backdrop-blur-md border border-white/10 rounded-lg flex items-center justify-center hover:bg-white/10 transition-colors shadow-lg text-white relative"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            {/* 机器人头部 */}
+            <rect x="3" y="6" width="18" height="12" rx="2" />
+            {/* 眼睛 */}
+            <circle cx="9" cy="12" r="1.5" fill="currentColor" />
+            <circle cx="15" cy="12" r="1.5" fill="currentColor" />
+            {/* 天线 */}
+            <line x1="12" y1="6" x2="12" y2="3" />
+            <circle cx="12" cy="2" r="1" fill="currentColor" />
+            {/* 嘴巴/表情 */}
+            <path d="M9 15h6" />
+          </svg>
+          {/* Tooltip - 延迟 2s 显示，离开立即消失 */}
+          <span className="absolute left-full ml-2 px-2 py-1 bg-[#1a1a1a] text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity duration-200 delay-[2000ms] group-hover:delay-0 pointer-events-none">
+            Agent
+          </span>
         </button>
       </div>
 
