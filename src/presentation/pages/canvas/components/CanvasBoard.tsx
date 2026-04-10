@@ -2166,6 +2166,11 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
   const [isApiSettingsModalOpen, setIsApiSettingsModalOpen] = useState(false);
 
   /**
+   * 重启更新状态
+   */
+  const [isRestarting, setIsRestarting] = useState(false);
+
+  /**
    * API 配置数据管理
    *
    * 【已移除】
@@ -2450,6 +2455,26 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
             - 复杂流程状态机
           */}
           <div className="bg-[#171717]/80 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full flex items-center space-x-4 text-[11px] pointer-events-auto shrink-0 shadow-lg">
+            {/* 重启更新提醒 - TODO: 后续关联前后端逻辑 */}
+            <button
+              className="flex items-center space-x-1 text-green-400 cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isRestarting) return;
+                setIsRestarting(true);
+                // TODO: 实际重启逻辑，完成后设置 setIsRestarting(false)
+              }}
+            >
+              <svg
+                className={`w-3.5 h-3.5 ${isRestarting ? 'animate-spin' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>{isRestarting ? '重启中...' : '重启更新'}</span>
+            </button>
             <div className="flex items-center space-x-2">
               <div className="flex items-center space-x-1">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
@@ -2458,11 +2483,11 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
             </div>
             
             <div className="flex items-center space-x-4 border-l border-white/10 pl-4">
-              <button className="flex items-center space-x-1 hover:text-white transition-colors">
+              <button className="flex items-center space-x-1 hover:text-white transition-colors cursor-pointer">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                 <span>下载</span>
               </button>
-              <button className="flex items-center space-x-1 hover:text-white transition-colors">
+              <button className="flex items-center space-x-1 hover:text-white transition-colors cursor-pointer">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
                 </svg>
@@ -2470,14 +2495,14 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
               </button>
               <button 
                 onClick={(e) => { e.stopPropagation(); setIsStorageModalOpen(true); }} 
-                className="flex items-center space-x-1 hover:text-white transition-colors"
+                className="flex items-center space-x-1 hover:text-white transition-colors cursor-pointer"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                 <span>存储设置</span>
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setIsApiSettingsModalOpen(true); }}
-                className="flex items-center space-x-1 hover:text-white transition-colors"
+                className="flex items-center space-x-1 hover:text-white transition-colors cursor-pointer"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path></svg>
                 <span>API 设置</span>
