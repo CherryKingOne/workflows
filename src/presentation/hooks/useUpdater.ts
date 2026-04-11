@@ -123,6 +123,8 @@ export function useUpdater(): UseUpdaterReturn {
       // 监听错误
       const unlistenError = await listen<string>('update://error', (event) => {
         setError(event.payload);
+        setIsDownloaded(false);
+        setProgress(null);
         setStatus('error');
       });
       unlisteners.push(unlistenError);
@@ -168,6 +170,8 @@ export function useUpdater(): UseUpdaterReturn {
 
     setStatus('downloading');
     setError(null);
+    setIsDownloaded(false);
+    setProgress(null);
 
     try {
       await invoke('download_update');

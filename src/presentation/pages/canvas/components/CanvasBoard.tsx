@@ -2238,6 +2238,13 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
     }
   }, [updateStatus, updateInfo, startDownload]);
 
+  const hasVersionMismatch = Boolean(
+    updateInfo?.version
+    && updateInfo?.current_version
+    && updateInfo.version !== updateInfo.current_version,
+  );
+  const canShowRestartUpdate = isDownloaded && hasVersionMismatch;
+
   /**
    * API 配置数据管理
    *
@@ -2702,7 +2709,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
           */}
           <div className="bg-[#171717]/80 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-full flex items-center space-x-4 text-[11px] pointer-events-auto shrink-0 shadow-lg">
             {/* 重启更新提醒 - 仅在下载完成后显示 */}
-            {isDownloaded && (
+            {canShowRestartUpdate && (
               <button
                 className="flex items-center space-x-1 text-green-400 cursor-pointer"
                 onClick={async (e) => {
@@ -2734,7 +2741,11 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
                 <svg className="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                <span>下载中 {progress.percent.toFixed(0)}%</span>
+                <span>
+                  {progress.total && progress.total > 0
+                    ? `下载中 ${progress.percent.toFixed(0)}%`
+                    : `下载中 ${(progress.downloaded / (1024 * 1024)).toFixed(1)} MB`}
+                </span>
               </div>
             )}
             <div className="flex items-center space-x-2">

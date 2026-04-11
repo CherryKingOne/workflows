@@ -110,8 +110,7 @@ pub async fn download_update(app: AppHandle) -> Result<(), String> {
                 let _ = app_clone.emit("update://progress", &progress);
             },
             || {
-                // 下载并安装完成
-                let _ = app.emit("update://downloaded", ());
+                // 下载数据完成回调（此时不代表安装已成功）
             },
         )
         .await
@@ -119,6 +118,10 @@ pub async fn download_update(app: AppHandle) -> Result<(), String> {
             let _ = app.emit("update://error", format!("Download failed: {}", e));
             format!("Failed to download update: {}", e)
         })?;
+
+    // 仅在 download_and_install 成功返回后再通知前端“可重启更新”
+    app.emit("update://downloaded", ())
+        .map_err(|e| format!("Failed to emit downloaded event: {}", e))?;
 
     Ok(())
 }
