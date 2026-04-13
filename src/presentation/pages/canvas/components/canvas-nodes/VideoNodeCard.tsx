@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Handle,
   type NodeProps,
@@ -42,6 +42,85 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
   // 本地状态 - 使用 activeTabKey 追踪当前选中的 Tab（解决多个 Tab 共用同一个 mode 的问题）
   const [promptText, setPromptText] = useState(data.promptText ?? '');
   const [activeTabKey, setActiveTabKey] = useState<string>('textToVideo');
+  const [showModelSelector, setShowModelSelector] = useState(false);
+  const modelSelectorRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * 模型列表数据
+   */
+  const modelList = [
+    {
+      id: 'seedance-2.0-vip',
+      name: 'Seedance 2.0 VIP',
+      icon: 'chart',
+      badge: 'VIP',
+      badgeColor: 'bg-[#f3a73c]',
+      duration: '2min',
+      description: '最强视频模型，会员专属通道, 15s音画同步',
+      isActive: true,
+    },
+    {
+      id: 'kling-o3',
+      name: 'Kling O3',
+      icon: 'rotate',
+      badge: 'VIP',
+      badgeColor: 'bg-[#f3a73c]',
+      duration: '3min',
+      description: '',
+      isActive: false,
+    },
+    {
+      id: 'kling-o1',
+      name: 'Kling O1',
+      icon: 'rotate',
+      badge: 'VIP',
+      badgeColor: 'bg-[#f3a73c]',
+      duration: '3min',
+      description: '',
+      extraBadge: '积分5折',
+      isActive: false,
+    },
+    {
+      id: 'shot-v2',
+      name: 'Shot V2',
+      icon: 'letter',
+      iconLetter: 'S',
+      badge: 'VIP',
+      badgeColor: 'bg-[#f3a73c]',
+      duration: '4min',
+      description: '',
+      isActive: false,
+    },
+  ];
+
+  /**
+   * 当前选中的模型
+   */
+  const [selectedModel, setSelectedModel] = useState(modelList[0]);
+
+  /**
+   * 点击外部关闭模型选择弹窗
+   */
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (modelSelectorRef.current && !modelSelectorRef.current.contains(event.target as Node)) {
+        setShowModelSelector(false);
+      }
+    };
+
+    if (showModelSelector) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showModelSelector]);
+
+  const handleModelSelect = (model: typeof modelList[0]) => {
+    setSelectedModel(model);
+    setShowModelSelector(false);
+  };
 
   /**
    * 节点是否处于"激活态"
@@ -355,19 +434,73 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
             {/* 左侧参数 */}
             <div className="flex items-center gap-4 text-[12px] text-white/60">
               {/* 模型选择 */}
-              <button
-                type="button"
-                className="nodrag flex items-center gap-1.5 cursor-pointer hover:text-white transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 512 512" fill="currentColor" className="text-white/80">
-                  <path d="M64 64c0-17.7-14.3-32-32-32S0 46.3 0 64V400c0 44.2 35.8 80 80 80H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H80c-8.8 0-16-7.2-16-16V64zm406.6 86.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L320 210.7l-57.4-57.4c-12.5-12.5-32.8-12.5-45.3 0l-112 112c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L240 221.3l57.4 57.4c12.5 12.5 32.8 12.5 45.3 0l128-128z"/>
-                </svg>
-                Seedance 2.0 VIP
-                <span className="bg-[#f3a73c] text-black text-[9px] px-1 rounded font-bold leading-tight">VIP</span>
-                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="m6 9 6 6 6-6"/>
-                </svg>
-              </button>
+              <div className="relative" ref={modelSelectorRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowModelSelector(!showModelSelector)}
+                  className="nodrag flex items-center gap-1.5 cursor-pointer hover:text-white transition-colors"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 512 512" fill="currentColor" className="text-white/80">
+                    <path d="M64 64c0-17.7-14.3-32-32-32S0 46.3 0 64V400c0 44.2 35.8 80 80 80H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H80c-8.8 0-16-7.2-16-16V64zm406.6 86.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L320 210.7l-57.4-57.4c-12.5-12.5-32.8-12.5-45.3 0l-112 112c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L240 221.3l57.4 57.4c12.5 12.5 32.8 12.5 45.3 0l128-128z"/>
+                  </svg>
+                  {selectedModel.name}
+                  <span className={`${selectedModel.badgeColor} text-black text-[9px] px-1 rounded font-bold leading-tight`}>{selectedModel.badge}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m6 9 6 6 6-6"/>
+                  </svg>
+                </button>
+
+                {/* 模型选择弹窗 */}
+                {showModelSelector && (
+                  <div className="absolute bottom-full left-0 mb-2 w-72 bg-[#1e1e1e]/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl z-50">
+                    <div className="max-h-[420px] overflow-y-auto">
+                      {modelList.map((model) => (
+                        <div
+                          key={model.id}
+                          onClick={() => handleModelSelect(model)}
+                          className={`p-4 border-b border-white/5 cursor-pointer transition-colors ${
+                            selectedModel.id === model.id ? 'bg-white/5' : 'hover:bg-white/5'
+                          }`}
+                        >
+                          {/* 激活项左侧指示条 */}
+                          {selectedModel.id === model.id && (
+                            <div className="absolute left-0 top-0 w-1 h-full bg-[#f3a73c]" />
+                          )}
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex items-center gap-2.5">
+                              {/* 图标 */}
+                              {model.icon === 'chart' && (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 512 512" fill="currentColor" className="text-white/80">
+                                  <path d="M64 64c0-17.7-14.3-32-32-32S0 46.3 0 64V400c0 44.2 35.8 80 80 80H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H80c-8.8 0-16-7.2-16-16V64zm406.6 86.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L320 210.7l-57.4-57.4c-12.5-12.5-32.8-12.5-45.3 0l-112 112c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L240 221.3l57.4 57.4c12.5 12.5 32.8 12.5 45.3 0l128-128z"/>
+                                </svg>
+                              )}
+                              {model.icon === 'rotate' && (
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 512 512" fill="currentColor" className="text-white/30">
+                                  <path d="M105.1 202.6c7.7-21.8 20.2-42.3 37.8-59.8c62.5-62.5 163.8-62.5 226.3 0L386.3 160H336c-17.7 0-32 14.3-32 32s14.3 32 32 32H463.5c0 0 0 0 0 0h.4c17.7 0 32-14.3 32-32V64c0-17.7-14.3-32-32-32s-32 14.3-32 32v51.2L414.4 97.6c-87.5-87.5-229.3-87.5-316.8 0C73.2 122 55.6 150.7 44.8 181.4c-5.9 16.7 2.9 34.9 19.5 40.8s34.9-2.9 40.8-19.5zM39 289.3c-5 1.5-9.8 4.2-13.7 8.2c-4 4-6.7 8.8-8.1 14c-.3 1.2-.6 2.5-.8 3.8c-.3 1.7-.4 3.4-.4 5.1V432c0 17.7 14.3 32 32 32s32-14.3 32-32V382.7l15.8 15.8c87.5 87.5 229.3 87.5 316.8 0c24.4-24.4 42.1-53.1 52.9-83.7c5.9-16.7-2.9-34.9-19.5-40.8s-34.9 2.9-40.8 19.5c-7.7 21.8-20.2 42.3-37.8 59.8c-62.5 62.5-163.8 62.5-226.3 0l-.1-.1L167.9 352H216c17.7 0 32-14.3 32-32s-14.3-32-32-32H48.4c-3.1 0-6.2 .4-9.2 1.3z"/>
+                                </svg>
+                              )}
+                              {model.icon === 'letter' && (
+                                <div className="w-4 h-4 rounded-full border border-white/20 flex items-center justify-center text-[8px] text-white/40">
+                                  {model.iconLetter}
+                                </div>
+                              )}
+                              <span className={`text-sm ${selectedModel.id === model.id ? 'font-semibold text-white' : 'text-white/80'}`}>{model.name}</span>
+                              <span className={`${model.badgeColor} text-black text-[9px] px-1 rounded font-bold`}>{model.badge}</span>
+                              {model.extraBadge && (
+                                <span className="bg-orange-500/20 text-orange-400 text-[9px] px-2 py-0.5 rounded-full font-medium">{model.extraBadge}</span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-white/20">{model.duration}</span>
+                          </div>
+                          {model.description && (
+                            <div className="text-[10px] text-white/40 leading-relaxed">{model.description}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* 比例/清晰度/时长 */}
               <button
