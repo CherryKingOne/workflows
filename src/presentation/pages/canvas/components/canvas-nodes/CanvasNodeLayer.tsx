@@ -18,11 +18,13 @@ import { CompareNodeCard } from './CompareNodeCard';
 import { FileUploadNodeCard } from './FileUploadNodeCard';
 import { ImageGenerationNodeCard } from './ImageGenerationNodeCard';
 import { PreviewNodeCard } from './PreviewNodeCard';
+import { VideoNodeCard } from './VideoNodeCard';
 import {
   COMPARE_NODE_TYPE,
   FILE_UPLOAD_NODE_TYPE,
   IMAGE_GENERATION_NODE_TYPE,
   PREVIEW_NODE_TYPE,
+  VIDEO_NODE_TYPE,
   type CanvasWorkflowNode,
 } from './types';
 
@@ -37,6 +39,7 @@ const nodeTypes: NodeTypes = {
   [FILE_UPLOAD_NODE_TYPE]: FileUploadNodeCard,
   [IMAGE_GENERATION_NODE_TYPE]: ImageGenerationNodeCard,
   [PREVIEW_NODE_TYPE]: PreviewNodeCard,
+  [VIDEO_NODE_TYPE]: VideoNodeCard,
 };
 
 interface CanvasNodeLayerProps {

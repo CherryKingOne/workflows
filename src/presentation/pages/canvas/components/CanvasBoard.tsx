@@ -30,12 +30,14 @@ import {
   FILE_UPLOAD_NODE_TYPE,
   IMAGE_GENERATION_NODE_TYPE,
   PREVIEW_NODE_TYPE,
+  VIDEO_NODE_TYPE,
   type CompareWorkflowNode,
   type FileUploadAssetSummary,
   type FileUploadWorkflowNode,
   type ImageGenerationPromptDraft,
   type ImageGenerationWorkflowNode,
   type PreviewWorkflowNode,
+  type VideoWorkflowNode,
 } from './canvas-nodes/types';
 import {
   type PersistedCanvasNode,
@@ -63,6 +65,8 @@ const DEFAULT_IMAGE_NODE_EXPANDED_HEIGHT = 380;
 const DEFAULT_IMAGE_NODE_COLLAPSED_HEIGHT = 88;
 const DEFAULT_PREVIEW_NODE_CARD_WIDTH = 500;
 const DEFAULT_PREVIEW_NODE_CARD_HEIGHT = 340;
+const DEFAULT_VIDEO_NODE_CARD_WIDTH = 680;
+const DEFAULT_VIDEO_NODE_CARD_HEIGHT = 384;
 const PREVIEW_LOADING_MIN_VISIBLE_MS = 700;
 const WORKFLOW_AUTO_SAVE_DEBOUNCE_MS = 800;
 const INITIAL_CANVAS_VIEWPORT: Viewport = { x: -1500, y: -1200, zoom: 0.89 };
@@ -2118,6 +2122,40 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * - 如果未来出现更多创建参数（模板、来源、对齐策略），
    *   建议提炼 `buildCompareNodeData()` 工厂函数，避免当前函数持续膨胀
    */
+  /**
+   * 创建"视频生成"节点
+   *
+   * 对应右键菜单中的"视频"按钮。
+   * 当前实现样式0：纯视频卡片（无底部操作面板）。
+   * 卡片内展示"尝试"选项列表（首尾帧生成视频、首帧生成视频）。
+   */
+  const createVideoNodeFromContextMenu = useCallback(() => {
+    const nodeId = `video-${nodeSequenceRef.current}`;
+    nodeSequenceRef.current += 1;
+
+    const nextNode: VideoWorkflowNode = {
+      id: nodeId,
+      type: VIDEO_NODE_TYPE,
+      selected: true,
+      position: {
+        // 原型宽度约 680，高度 aspect-video (16:9)，让点击点落在卡片几何中心附近。
+        x: Math.max(0, contextMenu.canvasX - DEFAULT_VIDEO_NODE_CARD_WIDTH / 2),
+        y: Math.max(0, contextMenu.canvasY - DEFAULT_VIDEO_NODE_CARD_HEIGHT / 2),
+      },
+      data: {
+        title: '视频节点',
+        cardWidth: DEFAULT_VIDEO_NODE_CARD_WIDTH,
+        onRequestRemove: handleRemoveNode,
+      },
+    };
+
+    setCanvasNodes((previousNodes) => [
+      ...previousNodes.map((node) => ({ ...node, selected: false })),
+      nextNode,
+    ]);
+    setContextMenu((previous) => ({ ...previous, visible: false }));
+  }, [contextMenu.canvasX, contextMenu.canvasY, handleRemoveNode]);
+
   const createCompareNodeFromContextMenu = useCallback(() => {
     const nodeId = `compare-${nodeSequenceRef.current}`;
     nodeSequenceRef.current += 1;
@@ -2922,6 +2960,7 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
               <span className="text-[13px] text-gray-300 group-hover:text-white">图片</span>
             </button>
             <button
+              onClick={createVideoNodeFromContextMenu}
               className="flex items-center px-3 py-1.5 hover:bg-white/5 rounded-md group transition-colors"
             >
               <svg className="w-4 h-4 text-gray-400 group-hover:text-white mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>

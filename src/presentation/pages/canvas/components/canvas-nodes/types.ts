@@ -12,6 +12,7 @@ import { type Node } from '@xyflow/react';
  */
 export const FILE_UPLOAD_NODE_TYPE = 'fileUpload';
 export const IMAGE_GENERATION_NODE_TYPE = 'imageGeneration';
+export const VIDEO_NODE_TYPE = 'videoGeneration';
 export const PREVIEW_NODE_TYPE = 'preview';
 export const COMPARE_NODE_TYPE = 'compare';
 
@@ -227,6 +228,62 @@ export type ImageGenerationWorkflowNode = Node<
 >;
 
 /**
+ * 视频生成比例类型
+ */
+export type VideoGenerationAspectRatio = 'auto' | '16:9' | '4:3' | '1:1' | '3:4';
+
+/**
+ * 视频生成分辨率档位
+ */
+export type VideoGenerationResolution = '480P' | '720P';
+
+/**
+ * 视频生成模式（对应顶部 Tab 切换）
+ *
+ * - `textToVideo`: 文生视频
+ * - `imageToVideo`: 图生视频
+ * - `firstLastFrame`: 首尾帧
+ */
+export type VideoGenerationMode = 'textToVideo' | 'imageToVideo' | 'firstLastFrame' | 'imageReference';
+
+/**
+ * 视频生成模型标识
+ */
+export type VideoGenerationModelId = string;
+
+/**
+ * 视频节点数据契约
+ *
+ * 职责边界（给新手）：
+ * - 这里只描述"视频节点卡片渲染与交互需要什么数据"
+ * - 不承载复杂业务规则（配额、风控、鉴权、计费等）
+ * - 不承载基础设施细节（HTTP/Tauri/SDK）
+ *
+ * 当前实现状态（样式0 - 纯视频卡片）：
+ * - 展示空状态卡片，包含"尝试"选项列表
+ * - 左右连接点（source/target）
+ * - 外部标题栏显示节点名称
+ *
+ * 后续扩展方向：
+ * - 样式1：底部操作面板（Tab切换、工具按钮、提示词输入、参数设置等）
+ * - 生成状态管理：idle / loading / ready / error
+ * - 生成结果媒体展示
+ */
+export interface VideoNodeData extends Record<string, unknown> {
+  /** 节点标题（显示在卡片外部左上角） */
+  title: string;
+  /** 卡片宽度（像素）- 默认 680 对应原型 w-[680px] */
+  cardWidth?: number;
+  /** 删除节点请求回调 */
+  onRequestRemove?: (nodeId: string) => void;
+}
+
+/**
+ * 画布内"视频生成节点"的强类型定义
+ */
+export type VideoWorkflowNode = Node<VideoNodeData, typeof VIDEO_NODE_TYPE>;
+
+/**
  * 对比节点数据契约
  *
  * 职责边界（给新手）：
@@ -414,5 +471,6 @@ export type PreviewWorkflowNode = Node<PreviewNodeData, typeof PREVIEW_NODE_TYPE
 export type CanvasWorkflowNode =
   | FileUploadWorkflowNode
   | ImageGenerationWorkflowNode
+  | VideoWorkflowNode
   | PreviewWorkflowNode
   | CompareWorkflowNode;
