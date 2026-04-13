@@ -2126,8 +2126,8 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
    * 创建"视频生成"节点
    *
    * 对应右键菜单中的"视频"按钮。
-   * 当前实现样式0：纯视频卡片（无底部操作面板）。
-   * 卡片内展示"尝试"选项列表（首尾帧生成视频、首帧生成视频）。
+   * 样式0：纯视频卡片（无底部操作面板）- 未激活态
+   * 样式1：底部操作面板（Tab切换、工具按钮、提示词输入、参数设置）- 激活态
    */
   const createVideoNodeFromContextMenu = useCallback(() => {
     const nodeId = `video-${nodeSequenceRef.current}`;
@@ -2138,13 +2138,23 @@ export function CanvasBoard({ project }: CanvasBoardProps) {
       type: VIDEO_NODE_TYPE,
       selected: true,
       position: {
-        // 原型宽度约 680，高度 aspect-video (16:9)，让点击点落在卡片几何中心附近。
+        // 原型宽度约 680，激活态时还有底部操作面板，让点击点落在卡片上方
         x: Math.max(0, contextMenu.canvasX - DEFAULT_VIDEO_NODE_CARD_WIDTH / 2),
-        y: Math.max(0, contextMenu.canvasY - DEFAULT_VIDEO_NODE_CARD_HEIGHT / 2),
+        y: Math.max(0, contextMenu.canvasY - DEFAULT_VIDEO_NODE_CARD_HEIGHT / 2 - 60),
       },
       data: {
         title: '视频节点',
         cardWidth: DEFAULT_VIDEO_NODE_CARD_WIDTH,
+        generationMode: 'textToVideo',
+        promptText: '',
+        modelName: '',
+        aspectRatio: '16:9',
+        resolution: '720P',
+        duration: 5,
+        generateAudio: false,
+        videoCount: 1,
+        generationStatus: 'idle',
+        generationErrorMessage: undefined,
         onRequestRemove: handleRemoveNode,
       },
     };

@@ -259,23 +259,59 @@ export type VideoGenerationModelId = string;
  * - 不承载复杂业务规则（配额、风控、鉴权、计费等）
  * - 不承载基础设施细节（HTTP/Tauri/SDK）
  *
- * 当前实现状态（样式0 - 纯视频卡片）：
- * - 展示空状态卡片，包含"尝试"选项列表
+ * 当前实现状态（样式0 + 样式1）：
+ * - 样式0：纯视频卡片，包含"尝试"选项列表
+ * - 样式1：激活态时显示底部操作面板
  * - 左右连接点（source/target）
  * - 外部标题栏显示节点名称
  *
- * 后续扩展方向：
- * - 样式1：底部操作面板（Tab切换、工具按钮、提示词输入、参数设置等）
- * - 生成状态管理：idle / loading / ready / error
- * - 生成结果媒体展示
+ * 底部操作面板（样式1）包含：
+ * - Tab 切换：文生视频 / 全能参考 / 图生视频 / 首尾帧 / 图片参考
+ * - 工具按钮：标记 / 运镜 / 角色库
+ * - 提示词输入框
+ * - 参数设置：模型选择 / 比例 / 清晰度 / 时长 / 音频等
  */
 export interface VideoNodeData extends Record<string, unknown> {
   /** 节点标题（显示在卡片外部左上角） */
   title: string;
   /** 卡片宽度（像素）- 默认 680 对应原型 w-[680px] */
   cardWidth?: number;
+  /** 当前选中的生成模式 Tab */
+  generationMode?: VideoGenerationMode;
+  /** 提示词文本 */
+  promptText?: string;
+  /** 选中的视频模型 ID */
+  modelName?: string;
+  /** 视频比例 */
+  aspectRatio?: VideoGenerationAspectRatio;
+  /** 视频清晰度 */
+  resolution?: VideoGenerationResolution;
+  /** 视频时长（秒） */
+  duration?: number;
+  /** 是否生成音频 */
+  generateAudio?: boolean;
+  /** 生成数量 */
+  videoCount?: number;
+  /** 生成状态 */
+  generationStatus?: 'idle' | 'loading' | 'ready' | 'error';
+  /** 生成错误信息 */
+  generationErrorMessage?: string;
   /** 删除节点请求回调 */
   onRequestRemove?: (nodeId: string) => void;
+  /** 请求更新生成模式 */
+  onRequestUpdateGenerationMode?: (nodeId: string, mode: VideoGenerationMode) => void;
+  /** 请求更新提示词 */
+  onRequestUpdatePromptText?: (nodeId: string, promptText: string) => void;
+  /** 请求更新模型 */
+  onRequestUpdateModelName?: (nodeId: string, modelName: string) => void;
+  /** 请求更新比例 */
+  onRequestUpdateAspectRatio?: (nodeId: string, aspectRatio: VideoGenerationAspectRatio) => void;
+  /** 请求更新清晰度 */
+  onRequestUpdateResolution?: (nodeId: string, resolution: VideoGenerationResolution) => void;
+  /** 请求更新时长 */
+  onRequestUpdateDuration?: (nodeId: string, duration: number) => void;
+  /** 请求生成视频 */
+  onRequestGenerateVideo?: (nodeId: string) => void;
 }
 
 /**
