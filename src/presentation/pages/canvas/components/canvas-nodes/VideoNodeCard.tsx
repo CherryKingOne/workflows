@@ -139,14 +139,20 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
   /**
    * Tab 按钮配置
    * 每个Tab使用唯一的key来避免重复激活问题
+   * toolButtons 定义该模式下显示的工具按钮
    */
-  const modeTabs: { mode: VideoGenerationMode; label: string; key: string }[] = [
-    { mode: 'textToVideo', label: '文生视频', key: 'textToVideo' },
-    { mode: 'imageToVideo', label: '全能参考', key: 'imageToVideo' },
-    { mode: 'imageToVideo', label: '图生视频', key: 'imageToVideo2' },
-    { mode: 'firstLastFrame', label: '首尾帧', key: 'firstLastFrame' },
-    { mode: 'imageReference', label: '图片参考', key: 'imageReference' },
+  const modeTabs: { mode: VideoGenerationMode; label: string; key: string; toolButtons: string[] }[] = [
+    { mode: 'textToVideo', label: '文生视频', key: 'textToVideo', toolButtons: ['marker', 'camera', 'character'] },
+    { mode: 'imageToVideo', label: '全能参考', key: 'imageToVideo', toolButtons: ['marker', 'camera', 'character'] },
+    { mode: 'imageToVideo', label: '图生视频', key: 'imageToVideo2', toolButtons: ['marker', 'camera'] },
+    { mode: 'firstLastFrame', label: '首尾帧', key: 'firstLastFrame', toolButtons: ['marker', 'character'] },
+    { mode: 'imageReference', label: '图片参考', key: 'imageReference', toolButtons: ['marker', 'camera', 'character'] },
   ];
+
+  /**
+   * 根据当前选中的 Tab key 获取应该显示的工具按钮
+   */
+  const currentToolButtons = modeTabs.find((tab) => tab.key === activeTabKey)?.toolButtons ?? ['marker', 'camera', 'character'];
 
   return (
     <div
@@ -307,33 +313,42 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
 
           {/* 工具按钮 */}
           <div className="flex gap-2.5 mb-5">
-            <button
-              type="button"
-              className="nodrag flex flex-col items-center justify-center w-14 h-14 bg-[#0c0c0c] border border-white/5 rounded-xl text-[10px] text-white/40 hover:border-white/20 hover:text-white/80 transition-all"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 384 512" fill="currentColor" className="mb-1.5">
-                <path d="M215.7 499.2C267 435 384 279.4 384 192C384 86 298 0 192 0S0 86 0 192c0 87.4 117 243 168.3 307.2c12.3 15.3 35.1 15.3 47.4 0zM192 128a64 64 0 1 1 0 128 64 64 0 1 1 0-128z"/>
-              </svg>
-              标记
-            </button>
-            <button
-              type="button"
-              className="nodrag flex flex-col items-center justify-center w-14 h-14 bg-[#0c0c0c] border border-white/5 rounded-xl text-[10px] text-white/40 hover:border-white/20 hover:text-white/80 transition-all"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 512 512" fill="currentColor" className="mb-1.5">
-                <path d="M149.1 64.8L138.7 96H64C28.7 96 0 124.7 0 160V416c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V160c0-35.3-28.7-64-64-64H373.3L362.9 64.8C356.4 45.2 338.1 32 317.4 32H194.6c-20.7 0-39 13.2-45.5 32.8zM256 192a96 96 0 1 1 0 192 96 96 0 1 1 0-192z"/>
-              </svg>
-              运镜
-            </button>
-            <button
-              type="button"
-              className="nodrag flex flex-col items-center justify-center w-14 h-14 bg-[#0c0c0c] border border-white/5 rounded-xl text-[10px] text-white/40 hover:border-white/20 hover:text-white/80 transition-all"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 640 512" fill="currentColor" className="mb-1.5">
-                <path d="M224 256A128 128 0 1 0 224 0a128 128 0 1 0 0 256zm-45.7 48C79.8 304 0 383.8 0 482.3C0 498.7 13.3 512 29.7 512H322.8c-3.1-8.8-3.7-18.4-1.4-27.8l15-60.1c2.8-11.3 8.6-21.5 16.8-29.7l40.3-40.3c-32.1-31-75.7-50.1-123.9-50.1H178.3zm435.5-68.3c-15.6-15.6-40.9-15.6-56.6 0l-29.4 29.4 71 71 29.4-29.4c15.6-15.6 15.6-40.9 0-56.6l-14.4-14.4zM375.9 417c-4.1 4.1-7 9.2-8.4 14.9l-15 60.1c-1.4 5.5 .2 11.2 4.2 15.2s9.7 5.6 15.2 4.2l60.1-15c5.6-1.4 10.8-4.3 14.9-8.4L576.1 358.7l-71-71L375.9 417z"/>
-              </svg>
-              角色库
-            </button>
+            {/* 标记按钮 */}
+            {currentToolButtons.includes('marker') && (
+              <button
+                type="button"
+                className="nodrag flex flex-col items-center justify-center w-14 h-14 bg-[#0c0c0c] border border-white/5 rounded-xl text-[10px] text-white/40 hover:border-white/20 hover:text-white/80 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 384 512" fill="currentColor" className="mb-1.5">
+                  <path d="M215.7 499.2C267 435 384 279.4 384 192C384 86 298 0 192 0S0 86 0 192c0 87.4 117 243 168.3 307.2c12.3 15.3 35.1 15.3 47.4 0zM192 128a64 64 0 1 1 0 128 64 64 0 1 1 0-128z"/>
+                </svg>
+                标记
+              </button>
+            )}
+            {/* 运镜按钮 */}
+            {currentToolButtons.includes('camera') && (
+              <button
+                type="button"
+                className="nodrag flex flex-col items-center justify-center w-14 h-14 bg-[#0c0c0c] border border-white/5 rounded-xl text-[10px] text-white/40 hover:border-white/20 hover:text-white/80 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 512 512" fill="currentColor" className="mb-1.5">
+                  <path d="M149.1 64.8L138.7 96H64C28.7 96 0 124.7 0 160V416c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V160c0-35.3-28.7-64-64-64H373.3L362.9 64.8C356.4 45.2 338.1 32 317.4 32H194.6c-20.7 0-39 13.2-45.5 32.8zM256 192a96 96 0 1 1 0 192 96 96 0 1 1 0-192z"/>
+                </svg>
+                运镜
+              </button>
+            )}
+            {/* 角色库按钮 */}
+            {currentToolButtons.includes('character') && (
+              <button
+                type="button"
+                className="nodrag flex flex-col items-center justify-center w-14 h-14 bg-[#0c0c0c] border border-white/5 rounded-xl text-[10px] text-white/40 hover:border-white/20 hover:text-white/80 transition-all"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 640 512" fill="currentColor" className="mb-1.5">
+                  <path d="M224 256A128 128 0 1 0 224 0a128 128 0 1 0 0 256zm-45.7 48C79.8 304 0 383.8 0 482.3C0 498.7 13.3 512 29.7 512H322.8c-3.1-8.8-3.7-18.4-1.4-27.8l15-60.1c2.8-11.3 8.6-21.5 16.8-29.7l40.3-40.3c-32.1-31-75.7-50.1-123.9-50.1H178.3zm435.5-68.3c-15.6-15.6-40.9-15.6-56.6 0l-29.4 29.4 71 71 29.4-29.4c15.6-15.6 15.6-40.9 0-56.6l-14.4-14.4zM375.9 417c-4.1 4.1-7 9.2-8.4 14.9l-15 60.1c-1.4 5.5 .2 11.2 4.2 15.2s9.7 5.6 15.2 4.2l60.1-15c5.6-1.4 10.8-4.3 14.9-8.4L576.1 358.7l-71-71L375.9 417z"/>
+                </svg>
+                角色库
+              </button>
+            )}
           </div>
 
           {/* 提示词输入框 */}

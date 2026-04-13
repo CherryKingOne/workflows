@@ -47,7 +47,7 @@ QWEN.md
 
 # html and txt files (temporary/dev files)
 
-*.txt
+
 
 # tauri signing keys (keep private!)
 .tauri/keys
