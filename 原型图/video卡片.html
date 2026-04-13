@@ -56,20 +56,17 @@
             </div>
 
             <!-- 视频卡片区域 -->
-            <div class="relative flex items-center justify-center gap-6 mb-6">
-                <button class="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-white/30 hover:border-white/40 hover:text-white transition-all">
-                    <i class="fa-solid fa-plus text-xs"></i>
-                </button>
+            <div class="relative flex items-center justify-center mb-6">
+                <!-- 左侧输出连接点 (source) -->
+                <div class="absolute left-0 top-1/2 -translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-white/40 bg-[#1a1a1a] z-10"></div>
 
                 <div class="flex-1 bg-[#1a1a1a] border border-white/10 rounded-[24px] p-8 aspect-video flex flex-col shadow-2xl">
-                    <div class="flex items-center gap-2 text-white/40 text-xs mb-8">
-                        <i class="fa-solid fa-circle-play"></i> 视频节点 2
+                    <!-- 节点标题（卡片外部左上角） -->
+                    <div class="absolute -top-8 left-0 text-[15px] font-medium tracking-wide text-[#888888] flex items-center gap-2">
+                        <i class="fa-solid fa-circle-play text-sm"></i> 视频节点 2
                     </div>
                     
                     <div class="flex-1 flex flex-col justify-center items-center">
-                        <div class="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mb-10 cursor-pointer hover:bg-white/15 transition-colors">
-                            <i class="fa-solid fa-play text-2xl text-white/60"></i>
-                        </div>
                         <div class="w-full max-w-xs space-y-4 text-sm">
                             <div class="text-white/40 text-[12px]">尝试：</div>
                             <div class="flex items-center gap-3 text-white/80 cursor-pointer hover:text-white">
@@ -82,9 +79,8 @@
                     </div>
                 </div>
 
-                <button class="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center text-white/30 hover:border-white/40 hover:text-white transition-all">
-                    <i class="fa-solid fa-plus text-xs"></i>
-                </button>
+                <!-- 右侧输入连接点 (target) -->
+                <div class="absolute right-0 top-1/2 translate-x-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-white/40 bg-[#1a1a1a] z-10"></div>
             </div>
 
             <!-- 底部操作面板 -->
