@@ -12,8 +12,6 @@ import {
 import { type VideoWorkflowNode, type VideoGenerationMode } from './types';
 
 const DEFAULT_CARD_WIDTH = 680;
-const DEFAULT_CARD_HEIGHT = 384; /* aspect-video ratio for 680px width (16:9) */
-const DEFAULT_OPERATION_PANEL_HEIGHT = 220;
 
 /**
  * 视频生成节点卡片（React Flow 自定义节点）
@@ -72,13 +70,6 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
   const shouldShowInputHandle = isNodeActive || hasIncomingSourceOnInputHandle;
 
   /**
-   * Handle 的锚点高度：根据是否显示操作面板调整
-   */
-  const handleTopOffset = isNodeActive
-    ? Math.round((DEFAULT_CARD_HEIGHT + DEFAULT_OPERATION_PANEL_HEIGHT) / 2)
-    : Math.round(DEFAULT_CARD_HEIGHT / 2);
-
-  /**
    * 监听连线状态，用于触发流光效果
    */
   const connectionPreview = useConnection((connection) => {
@@ -119,7 +110,7 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
    */
   React.useEffect(() => {
     updateNodeInternals(id);
-  }, [cardWidth, handleTopOffset, id, isNodeActive, shouldShowInputHandle, updateNodeInternals]);
+  }, [cardWidth, id, isNodeActive, shouldShowInputHandle, updateNodeInternals]);
 
   const handleRemoveNode = () => {
     data.onRequestRemove?.(id);
@@ -167,7 +158,7 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
           id="input"
           position={Position.Left}
           style={{
-            top: `${handleTopOffset}px`,
+            top: '50%',
             left: isInputHandleConnected ? -5 : isNodeActive ? -7 : -6,
             transform: 'translate(0, -50%)',
             width: isInputHandleConnected ? 10 : 12,
@@ -260,7 +251,7 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
           id="output"
           position={Position.Right}
           style={{
-            top: `${handleTopOffset}px`,
+            top: '50%',
             right: isNodeActive ? -7 : -6,
             transform: 'translate(0, -50%)',
             width: 12,
@@ -317,7 +308,7 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
             {currentToolButtons.includes('marker') && (
               <button
                 type="button"
-                className="nodrag flex flex-col items-center justify-center w-14 h-14 bg-[#0c0c0c] border border-white/5 rounded-xl text-[10px] text-white/40 hover:border-white/20 hover:text-white/80 transition-all"
+                className="nodrag flex flex-col items-center justify-center w-14 h-14 bg-[#0c0c0c] border border-white/5 rounded-xl text-sm text-white/40 hover:border-white/20 hover:text-white/80 transition-all"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 384 512" fill="currentColor" className="mb-1.5">
                   <path d="M215.7 499.2C267 435 384 279.4 384 192C384 86 298 0 192 0S0 86 0 192c0 87.4 117 243 168.3 307.2c12.3 15.3 35.1 15.3 47.4 0zM192 128a64 64 0 1 1 0 128 64 64 0 1 1 0-128z"/>
@@ -329,7 +320,7 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
             {currentToolButtons.includes('camera') && (
               <button
                 type="button"
-                className="nodrag flex flex-col items-center justify-center w-14 h-14 bg-[#0c0c0c] border border-white/5 rounded-xl text-[10px] text-white/40 hover:border-white/20 hover:text-white/80 transition-all"
+                className="nodrag flex flex-col items-center justify-center w-14 h-14 bg-[#0c0c0c] border border-white/5 rounded-xl text-sm text-white/40 hover:border-white/20 hover:text-white/80 transition-all"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 512 512" fill="currentColor" className="mb-1.5">
                   <path d="M149.1 64.8L138.7 96H64C28.7 96 0 124.7 0 160V416c0 35.3 28.7 64 64 64H448c35.3 0 64-28.7 64-64V160c0-35.3-28.7-64-64-64H373.3L362.9 64.8C356.4 45.2 338.1 32 317.4 32H194.6c-20.7 0-39 13.2-45.5 32.8zM256 192a96 96 0 1 1 0 192 96 96 0 1 1 0-192z"/>
@@ -341,7 +332,7 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
             {currentToolButtons.includes('character') && (
               <button
                 type="button"
-                className="nodrag flex flex-col items-center justify-center w-14 h-14 bg-[#0c0c0c] border border-white/5 rounded-xl text-[10px] text-white/40 hover:border-white/20 hover:text-white/80 transition-all"
+                className="nodrag flex flex-col items-center justify-center w-14 h-14 bg-[#0c0c0c] border border-white/5 rounded-xl text-sm text-white/40 hover:border-white/20 hover:text-white/80 transition-all"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 640 512" fill="currentColor" className="mb-1.5">
                   <path d="M224 256A128 128 0 1 0 224 0a128 128 0 1 0 0 256zm-45.7 48C79.8 304 0 383.8 0 482.3C0 498.7 13.3 512 29.7 512H322.8c-3.1-8.8-3.7-18.4-1.4-27.8l15-60.1c2.8-11.3 8.6-21.5 16.8-29.7l40.3-40.3c-32.1-31-75.7-50.1-123.9-50.1H178.3zm435.5-68.3c-15.6-15.6-40.9-15.6-56.6 0l-29.4 29.4 71 71 29.4-29.4c15.6-15.6 15.6-40.9 0-56.6l-14.4-14.4zM375.9 417c-4.1 4.1-7 9.2-8.4 14.9l-15 60.1c-1.4 5.5 .2 11.2 4.2 15.2s9.7 5.6 15.2 4.2l60.1-15c5.6-1.4 10.8-4.3 14.9-8.4L576.1 358.7l-71-71L375.9 417z"/>
