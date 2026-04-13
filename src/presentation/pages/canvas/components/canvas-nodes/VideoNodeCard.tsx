@@ -1,10 +1,11 @@
 "use client";
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Handle,
   type NodeProps,
   Position,
+  useConnection,
   useNodeConnections,
   useUpdateNodeInternals,
 } from '@xyflow/react';
@@ -71,6 +72,50 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
   const handleTopOffset = Math.round(DEFAULT_CARD_HEIGHT / 2);
 
   /**
+   * 监听连线状态，用于触发流光效果
+   *
+   * 当用户从其他节点拖拽连线靠近本节点的 input handle 时，
+   * 显示上下两条水平流光动画，提示用户"可以在此处连接"。
+   */
+  const connectionPreview = useConnection((connection) => {
+    if (!connection.inProgress || !connection.fromNode) {
+      return {
+        inProgress: false,
+        fromNodeId: null as string | null,
+        toNodeId: null as string | null,
+        toHandleId: null as string | null,
+      };
+    }
+
+    return {
+      inProgress: true,
+      fromNodeId: connection.fromNode.id,
+      toNodeId: connection.toNode?.id ?? null,
+      toHandleId: connection.toHandle?.id ?? null,
+    };
+  });
+
+  /**
+   * 连线命中输入点时显示上下流光（拖线未松手）
+   *
+   * 触发条件（与图片节点保持一致）：
+   * 1. 正在拖线；
+   * 2. 当前目标命中本节点 input handle；
+   * 3. 非自己连接自己。
+   */
+  const showConnectionMergeGlow = useMemo(() => {
+    if (!connectionPreview.inProgress) {
+      return false;
+    }
+
+    if (connectionPreview.fromNodeId === id) {
+      return false;
+    }
+
+    return connectionPreview.toNodeId === id && connectionPreview.toHandleId === 'input';
+  }, [connectionPreview.fromNodeId, connectionPreview.inProgress, connectionPreview.toHandleId, connectionPreview.toNodeId, id]);
+
+  /**
    * 刷新 React Flow 内部缓存
    */
   React.useEffect(() => {
@@ -123,6 +168,14 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
           {data.title}
         </div>
 
+        {/* 流光效果 - 当连线接近时显示 */}
+        {showConnectionMergeGlow && (
+          <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-[24px]">
+            <div className="video-node-merge-glint video-node-merge-glint-top" />
+            <div className="video-node-merge-glint video-node-merge-glint-bottom" />
+          </div>
+        )}
+
         {/* 卡片内容区 - 居中显示"尝试"选项 */}
         <div className="flex-1 flex flex-col justify-center items-center">
           <div className="w-full max-w-xs space-y-4">
@@ -153,7 +206,7 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
           </div>
         </div>
 
-        {/* 删除按钮 - 仅激活且悬停时显示 */}
+        {/* 删除按钮 - 仅激活时显示 */}
         {isNodeActive && (
           <button
             type="button"
@@ -189,6 +242,49 @@ export function VideoNodeCard({ id, data, selected }: NodeProps<VideoWorkflowNod
           transition: 'all 0.2s ease',
         }}
       />
+
+      {/* 流光效果 CSS 动画 */}
+      <style jsx>{`
+        @keyframes video-node-glint-slide {
+          0% {
+            transform: translateX(-52%);
+            opacity: 0.12;
+          }
+          50% {
+            opacity: 0.92;
+          }
+          100% {
+            transform: translateX(52%);
+            opacity: 0.16;
+          }
+        }
+
+        .video-node-merge-glint {
+          position: absolute;
+          left: -26%;
+          width: 152%;
+          height: 2px;
+          background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.06) 18%,
+            rgba(255, 255, 255, 0.92) 50%,
+            rgba(255, 255, 255, 0.06) 82%,
+            rgba(255, 255, 255, 0) 100%
+          );
+          filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.35));
+          animation: video-node-glint-slide 1.2s ease-in-out infinite;
+        }
+
+        .video-node-merge-glint-top {
+          top: 0;
+        }
+
+        .video-node-merge-glint-bottom {
+          bottom: 0;
+          animation-delay: 0.14s;
+        }
+      `}</style>
     </div>
   );
 }
